@@ -3,6 +3,8 @@
 #include "hardware/spi.h"
 #include "pico/multicore.h"
 #include "BackBuffer.h"
+static int dma_chan;
+static volatile bool dma_busy = false;
 
 struct repeating_timer timer;
 //uint16_t frame_buffer1[WIDTH * HEIGHT]; // Буфер для экрана1
@@ -24,10 +26,10 @@ void coreEntry(){
     while (true)
     {
         uint32_t data = multicore_fifo_pop_blocking();
-        if (data==0)
-        {
-            st7789_send_framebuffer(frame_buffer); //Рисую экран 0
-            multicore_fifo_push_blocking(0); //Экран 0 свободен
+        if (data==0){
+            if (!dma_busy){
+                st7789_send_framebuffer(frame_buffer);
+            }
         }
         /*else if (data==1)
         {
@@ -47,6 +49,12 @@ void coreEntry(){
 void st7789_init() {
     // Initialize SPI
     spi_init(SPI_PORT, 1000 * 100 * 625); // 62.5MHz
+    spi_set_format(SPI_PORT,
+               8,
+               SPI_CPOL_0,
+               SPI_CPHA_0,
+               SPI_MSB_FIRST);
+
     gpio_set_function(PIN_MOSI, GPIO_FUNC_SPI);
     gpio_set_function(PIN_SCK, GPIO_FUNC_SPI);
 
@@ -115,6 +123,27 @@ void st7789_init() {
     st7789_send_data(0x1b); // V71
     st7789_send_data(0x1e); // V78*/
 
+    // DMA init
+    dma_chan = dma_claim_unused_channel(true);
+    dma_channel_config c = dma_channel_get_default_config(dma_chan);
+    dma_channel_set_irq0_enabled(dma_chan, true);
+    irq_set_exclusive_handler(DMA_IRQ_0, dma_handler);
+    irq_set_enabled(DMA_IRQ_0, true);
+
+    channel_config_set_transfer_data_size(&c, DMA_SIZE_8);
+    channel_config_set_read_increment(&c, true);
+    channel_config_set_write_increment(&c, false);
+    channel_config_set_dreq(&c, spi_get_dreq(SPI_PORT, true));
+
+    dma_channel_configure(
+        dma_chan,
+        &c,
+        &spi_get_hw(SPI_PORT)->dr,
+        NULL,
+        0,
+        false
+    );
+
     st7789_send_command(0x21); //INVON (21h): Display Inversion On
     st7789_send_command(0x29); // Display ON
 }
@@ -134,30 +163,30 @@ void st7789_send_data(uint8_t data) {
 }
 
 void st7789_send_framebuffer(uint16_t *buffer) {
-    // Установить область для записи на весь экран
+// Установить область для записи на весь экран
+// Установка окна по X
     st7789_send_command(0x2A); // Column address set
     st7789_send_data(0x00);
     st7789_send_data(0x00);           // X-start = 0
     st7789_send_data((WIDTH - 1) >> 8);
     st7789_send_data((WIDTH - 1) & 0xFF); // X-end = WIDTH-1
 
+// Установка окна по Y
     st7789_send_command(0x2B); // Row address set
     st7789_send_data(0x00);
     st7789_send_data(0x00);           // Y-start = 0
     st7789_send_data((HEIGHT - 1) >> 8);
     st7789_send_data((HEIGHT - 1) & 0xFF); // Y-end = HEIGHT-1
 
-    // Команда записи данных в память дисплея
-    st7789_send_command(0x2C); // Memory write
+    st7789_send_command(0x2C); // Memory write. Команда записи данных в память дисплея
 
-    // Передача буфера на дисплей
-    gpio_put(PIN_DC, 1); // Режим данных
-    gpio_put(PIN_CS, 0); // Выбор устройства
+    gpio_put(PIN_DC, 1);
+    gpio_put(PIN_CS, 0);
 
-    // Отправка буфера по SPI
-    spi_write_blocking(SPI_PORT, (uint8_t *)buffer, WIDTH * HEIGHT * 2);
+    dma_busy = true;
 
-    gpio_put(PIN_CS, 1); // Завершить передачу
+    dma_channel_set_read_addr(dma_chan, buffer, false);
+    dma_channel_set_trans_count(dma_chan, WIDTH * HEIGHT *2, true);
 }
 
 void send_start_signal() {
@@ -225,9 +254,18 @@ bool dht_read(float *humidity, float *temperature) {
 }
 
 bool repeating_timer_callback(struct repeating_timer *t) {
+    return true;
     if (dht_read(&humidity, &temperature)) {
     } else {
         humidity=-0.0;
         temperature=-0.0;
     }
+}
+
+void dma_handler() //Обработчик завершения DMA
+{
+    dma_hw->ints0 = 1u << dma_chan;
+    dma_busy = false;
+    gpio_put(PIN_CS, 1);
+    multicore_fifo_push_blocking(0);  // <-- экран действительно свободен
 }

@@ -4,6 +4,8 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include "hardware/timer.h"
+#include "hardware/dma.h"
+
 
 
 #define SPI_PORT spi0
@@ -25,7 +27,7 @@ void st7789_send_data(uint8_t data);
 void st7789_send_framebuffer(uint16_t *buffer);
 void coreEntry();
 void st7789_init();
-
+void dma_handler(); //Обработчик завершения DMA
 void send_start_signal();
 bool wait_for_signal(uint32_t timeout_us, bool level);
 void read_dht_data(uint8_t *data);
