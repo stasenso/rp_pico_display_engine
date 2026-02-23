@@ -11,6 +11,7 @@ pico_sdk_init()
 add_executable(${PROJECT_NAME}
     src/main.c
     ../../src/core/display.c
+    ../../src/render/renderer.c
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
