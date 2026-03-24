@@ -7,6 +7,18 @@
 extern "C" {
 #endif
 
+#define RGB565(R, G, B) \
+    ((uint16_t)((((uint16_t)(R) & 0xF8u) << 8) | \
+                (((uint16_t)(G) & 0xFCu) << 3) | \
+                (((uint16_t)(B) & 0xF8u) >> 3)))
+
+#define BSWAP16(X) \
+    ((uint16_t)((((uint16_t)(X) & 0x00FFu) << 8) | \
+                (((uint16_t)(X) & 0xFF00u) >> 8)))
+
+/* RGB888 -> RGB565 with swapped byte order for ctx->buf */
+#define RGB16(R, G, B) BSWAP16(RGB565((R), (G), (B)))
+
 typedef struct
 {
     uint16_t* buf;
@@ -49,4 +61,3 @@ void render_bezier(
 #ifdef __cplusplus
 }
 #endif
-
