@@ -11,7 +11,11 @@ pico_sdk_init()
 add_executable(${PROJECT_NAME}
     src/main.c
     ../../src/core/display.c
-    ../../src/render/renderer.c
+    ../../src/render/context.c
+    ../../src/render/line.c
+    ../../src/render/grid.c
+    ../../src/render/sine_wave.c
+    ../../src/render/bezier.c
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE

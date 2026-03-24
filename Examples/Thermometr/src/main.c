@@ -1,6 +1,8 @@
 #include "pico/stdlib.h"
 #include "display/display.h"
-#include "display/renderer.h"
+#include "display/render/context.h"
+#include "display/render/grid.h"
+#include "display/render/sine_wave.h"
 
 
 #define WIDTH   320
