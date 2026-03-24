@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.18.4)
 include($ENV{PICO_SDK_PATH}/external/pico_sdk_import.cmake)
 
-project(circle C CXX ASM)
+project(rp_pico_display_engine C CXX ASM)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 
