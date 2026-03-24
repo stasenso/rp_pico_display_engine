@@ -41,9 +41,9 @@ int main()
         uint16_t* buf = display_get_draw_buffer();
         render_begin(&rc, buf, WIDTH, HEIGHT);
 
-        render_clear(&rc, 0x10A2);
-        render_grid(&rc, 20, 20, 40, 0x5ACB);
-        render_sine_wave(&rc, WIDTH, 50, 2.0f, 0, HEIGHT / 2, phase, 0xF800);
+        render_clear(&rc, RGB16(9,19,9));
+        render_grid(&rc, 20, 20, 40, RGB16(12,26,13));
+        render_sine_wave(&rc, WIDTH, 50, 2.0f, 0, HEIGHT / 2, phase, RGB16(0,255,0));
 
         phase += 0.08f;
         if (phase > 6.2831853f)
