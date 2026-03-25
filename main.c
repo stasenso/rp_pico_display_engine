@@ -2,7 +2,8 @@
 #include "Thread.h"
 #include "pico/multicore.h"
 #include "pico/stdlib.h"
-#include "font_data.h"
+#include "Font/font_data.h"
+#include "display/render/context.h"
 #include "BackBuffer.h"
 
 int main() {
@@ -29,6 +30,7 @@ int main() {
     float x=0.0;
     float freq=1.0;
     bool minmax=false;
+    render_ctx_t rc;
     wchar_t buffer[100];
     while (x<500)
     {
@@ -37,8 +39,9 @@ int main() {
         fillBufer(frame_buffer,reverse(0x4A69));//
         grid(20,20,40,0x634d);
         generate_sine_wave_points(num_points, 50, freq, 0, HEIGHT / 2,x);
+        render_begin(&rc, frame_buffer, WIDTH, HEIGHT);
         swprintf(buffer, sizeof(buffer) / sizeof(buffer[0]), L"Value of pi: %.2f", temperature);
-        draw_string(20,110,buffer,0b1111111111111111); //
+        draw_string(&rc, 20,110,buffer,0b1111111111111111); //
         multicore_fifo_push_blocking(0); //Экран 0 нарисован       
         x+=0.03;
         if (minmax)
@@ -74,4 +77,3 @@ void fillBufer (uint16_t* buffer,uint16_t color){
     }
     
 }
-

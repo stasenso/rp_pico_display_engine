@@ -7,7 +7,17 @@ set(CMAKE_CXX_STANDARD 17)
 
 pico_sdk_init()
 
-add_executable(${PROJECT_NAME} main.c Thread.c font_data.c BackBuffer.c)
+add_executable(${PROJECT_NAME}
+    main.c
+    Thread.c
+    src/Font/font_data.c
+    src/render/context.c
+    BackBuffer.c
+)
+
+target_include_directories(${PROJECT_NAME} PRIVATE
+    include
+)
 
 target_link_libraries(${PROJECT_NAME}
     pico_stdlib
