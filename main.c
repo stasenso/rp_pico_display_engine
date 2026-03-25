@@ -1,79 +1,52 @@
-#include "main.h"
-#include "Thread.h"
-#include "pico/multicore.h"
 #include "pico/stdlib.h"
-#include "Font/font_data.h"
+#include "display/display.h"
 #include "display/render/context.h"
-#include "BackBuffer.h"
+#include "display/render/grid.h"
+#include "display/render/sine_wave.h"
+#include "Font/font_data.h"
 
-int main() {
-    uint16_t red = 0;
-    uint16_t green = 0;
-    uint16_t blue = 0;
-    uint16_t summcolor=0;
-    uint32_t data;
-    // Точки для кривой Безье
-    int points_x[60];
-    int points_y[60];
-    size_t num_points = 1600;
-    uint16_t color = reverse(0b0000011111100000);
-    stdio_init_all();
-    
-    // Настройка GPIO25 как выход
-    gpio_init(25);
-    gpio_set_dir(25, GPIO_OUT);
+#define WIDTH   320
+#define HEIGHT  240
 
-    // Включение светодиода
-    gpio_put(25, 1);
-
-    multicore_launch_core1(coreEntry); //Запускаю в ядре 1 процесс вывода на экран
-    float x=0.0;
-    float freq=1.0;
-    bool minmax=false;
-    render_ctx_t rc;
-    wchar_t buffer[100];
-    while (x<500)
-    {
-        data = multicore_fifo_pop_blocking();
-        
-        fillBufer(frame_buffer,reverse(0x4A69));//
-        grid(20,20,40,0x634d);
-        generate_sine_wave_points(num_points, 50, freq, 0, HEIGHT / 2,x);
-        render_begin(&rc, frame_buffer, WIDTH, HEIGHT);
-        swprintf(buffer, sizeof(buffer) / sizeof(buffer[0]), L"Value of pi: %.2f", temperature);
-        draw_string(&rc, 20,110,buffer,0b1111111111111111); //
-        multicore_fifo_push_blocking(0); //Экран 0 нарисован       
-        x+=0.03;
-        if (minmax)
-        {
-            if (freq<=0.0){
-            minmax=false;}
-            else freq-=0.05;
-        }
-        else
-        {
-            if (freq>=10.0){
-            minmax=true;}
-            else freq+=0.05;
-        }
-
-        
-
-        //sleep_ms(20);   
-    }
-    
-    while (1) {
-        tight_loop_contents();
-    }
+static void on_frame_done(void)
+{
+    display_submit();
 }
 
-void fillBufer (uint16_t* buffer,uint16_t color){
-    for (uint16_t  y = 0; y < HEIGHT; y++)
+int main(void)
+{
+    stdio_init_all();
+
+    display_config_t cfg = {
+        .width = WIDTH,
+        .height = HEIGHT,
+        .buffer_count = 1,
+        .mode = DISPLAY_MODE_SAFE,
+        .frame_done_cb = on_frame_done
+    };
+
+    display_init(&cfg);
+    display_submit();
+
+    float phase = 0.0f;
+    render_ctx_t rc;
+
+    while (1)
     {
-        for (uint16_t x = 0; x < WIDTH; x++)
+        display_poll();
+
+        uint16_t* buf = display_get_draw_buffer();
+        render_begin(&rc, buf, WIDTH, HEIGHT);
+
+        render_clear(&rc, RGB16(9, 19, 9));
+        render_grid(&rc, 20, 20, 40, RGB16(12, 26, 13));
+        render_sine_wave(&rc, WIDTH, 50, 2.0f, 0, HEIGHT / 2, phase, RGB16(0, 255, 0));
+        draw_string(&rc, 12, 12, L"rp_pico_display_engine", RGB565(255, 255, 255));
+
+        phase += 0.08f;
+        if (phase > 6.2831853f)
         {
-            buffer[y*WIDTH+x]=color;
-        }        
+            phase -= 6.2831853f;
+        }
     }
-    
 }

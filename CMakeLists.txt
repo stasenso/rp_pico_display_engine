@@ -9,14 +9,18 @@ pico_sdk_init()
 
 add_executable(${PROJECT_NAME}
     main.c
-    Thread.c
     src/Font/font_data.c
+    src/core/display.c
     src/render/context.c
-    BackBuffer.c
+    src/render/line.c
+    src/render/grid.c
+    src/render/sine_wave.c
+    src/render/bezier.c
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     include
+    include/display
 )
 
 target_link_libraries(${PROJECT_NAME}
