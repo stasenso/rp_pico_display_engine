@@ -10,6 +10,7 @@ pico_sdk_init()
 
 add_executable(${PROJECT_NAME}
     src/main.c
+    ../../src/Font/font_data.c
     ../../src/core/display.c
     ../../src/render/context.c
     ../../src/render/line.c
