@@ -100,13 +100,24 @@ void display_init(const display_config_t* cfg);
    ============================================================ */
 
 /*
- * Буфер для рисования.
+ * Неблокирующая попытка получить буфер для рисования.
  *
- * SAFE + 1 буфер:
- *     может блокировать пока DMA активен.
- *
- * RAW:
- *     никогда не блокирует.
+ * Возвращает NULL если буфер сейчас недоступен
+ * (например, SAFE + 1 буфер и DMA активен).
+ */
+uint16_t* display_try_acquire_draw_buffer(void);
+
+
+/*
+ * Блокирующее получение буфера для рисования.
+ */
+uint16_t* display_acquire_draw_buffer_blocking(void);
+
+
+/*
+ * Совместимость со старым API.
+ * Начиная с текущей версии работает как non-blocking alias:
+ * эквивалентно display_try_acquire_draw_buffer().
  */
 uint16_t* display_get_draw_buffer(void);
 

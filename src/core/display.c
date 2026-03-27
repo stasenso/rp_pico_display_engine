@@ -286,18 +286,41 @@ void display_init(const display_config_t* cfg)
 
 /* ------------------------------------------------------------ */
 
-uint16_t* display_get_draw_buffer(void)
+uint16_t* display_try_acquire_draw_buffer(void)
 {
     if (ctx.mode == DISPLAY_MODE_SAFE &&
         ctx.buffer_count == 1)
     {
-        while (ctx.dma_busy)
+        if (ctx.dma_busy)
         {
-            /* активное ожидание */
+            return NULL;
         }
     }
 
     return ctx.buffers[ctx.draw_index];
+}
+
+
+/* ------------------------------------------------------------ */
+
+uint16_t* display_acquire_draw_buffer_blocking(void)
+{
+    uint16_t* buf = NULL;
+
+    while (buf == NULL)
+    {
+        buf = display_try_acquire_draw_buffer();
+    }
+
+    return buf;
+}
+
+
+/* ------------------------------------------------------------ */
+
+uint16_t* display_get_draw_buffer(void)
+{
+    return display_try_acquire_draw_buffer();
 }
 
 
