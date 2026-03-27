@@ -32,4 +32,24 @@ target_link_libraries(${PROJECT_NAME}
     pico_multicore
 )
 
+# Display pin mapping (single source of truth for this example).
+set(DISPLAY_SPI_PORT spi1)
+set(DISPLAY_PIN_MOSI 15)
+set(DISPLAY_PIN_SCK 14)
+set(DISPLAY_PIN_CS 13)
+set(DISPLAY_PIN_DC 12)
+set(DISPLAY_PIN_RST 11)
+set(DISPLAY_PIN_BL 10)
+
+# Pass board pin mapping into display.c without editing engine sources.
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+    SPI_PORT=${DISPLAY_SPI_PORT}
+    PIN_MOSI=${DISPLAY_PIN_MOSI}
+    PIN_SCK=${DISPLAY_PIN_SCK}
+    PIN_CS=${DISPLAY_PIN_CS}
+    PIN_DC=${DISPLAY_PIN_DC}
+    PIN_RST=${DISPLAY_PIN_RST}
+    PIN_BL=${DISPLAY_PIN_BL}
+)
+
 pico_add_extra_outputs(${PROJECT_NAME})
