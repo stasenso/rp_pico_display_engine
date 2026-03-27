@@ -1,128 +1,142 @@
-#include "pico/stdlib.h"
-#include "display/display.h"
-#include "display/render/context.h"
-#include "display/render/grid.h"
-#include "display/render/sine_wave.h"
-#include "Font/font_data.h"
+#include "pico/stdlib.h" // Подключаем базовые функции SDK Pico (время, таймеры, sleep, assert).
+#include "display/display.h" // Подключаем API дисплейного движка (init/poll/submit/buffer).
+#include "display/render/context.h" // Подключаем контекст рисования для примитивов.
+#include "display/render/grid.h" // Подключаем функцию рисования сетки.
+#include "display/render/sine_wave.h" // Подключаем функцию рисования синусоиды.
+#include "Font/font_data.h" // Подключаем шрифты и draw_string.
 
 
-#define WIDTH   320
-#define HEIGHT  240
-#define TEXT_H  16
+#define WIDTH   320 // Ширина экрана в пикселях.
+#define HEIGHT  240 // Высота экрана в пикселях.
+#define TEXT_H  22 // Высота глифа шрифта для расчета нижней границы текста.
 
-static volatile bool frame_tick_due = false;
-static repeating_timer_t frame_timer;
+static volatile bool frame_tick_due = false; // Флаг "пришел тик кадра", устанавливается в прерывании таймера.
+static repeating_timer_t frame_timer; // Дескриптор периодического таймера Pico SDK.
 
-static bool frame_timer_cb(repeating_timer_t* t)
-{
-    (void)t;
-    frame_tick_due = true; /* Схлопываем тики: если опоздали, лишние просто пропускаются */
-    return true;
-}
+static bool frame_timer_cb(repeating_timer_t* t) // Callback аппаратного периодического таймера.
+{ 
+    (void)t; // Параметр callback не используем, явно подавляем предупреждение компилятора.
+    frame_tick_due = true; // Помечаем, что можно обработать один кадр; лишние тики схлопываются.
+    return true; // Возвращаем true, чтобы таймер продолжал работать периодически.
+} 
 
-static inline void wait_for_irq(void)
-{
-    __asm volatile ("wfi");
-}
+static inline void wait_for_irq(void) // Вспомогательная функция для энергосберегающего ожидания прерываний.
+{ // Начало функции ожидания IRQ.
+    __asm volatile ("wfi"); // Инструкция ARM Wait For Interrupt: CPU спит до любого IRQ.
+} // Конец функции ожидания IRQ.
 
-static void on_frame_done(void) {}
+static uint16_t text_width_px(const wchar_t* str) // Считаем фактическую ширину строки в пикселях через таблицу ширин глифов.
+{ // Начало функции расчета ширины строки.
+    uint16_t width = 0; // Накапливаем итоговую ширину строки.
+    while (*str) // Пока не дошли до нулевого терминатора строки.
+    { // Начало цикла по символам.
+        width = (uint16_t)(width + get_char_width(*str)); // Добавляем ширину текущего символа.
+        str++; // Переходим к следующему символу.
+    } // Конец цикла по символам.
+    return width; // Возвращаем итоговую ширину строки.
+} // Конец функции расчета ширины строки.
 
-int main()
-{
-    stdio_init_all();
+static void update_axis_reflect(int* pos, int* dir, int min_pos, int max_pos) // Обновляем одну координату с зеркальным отражением от границ.
+{ // Начало функции обновления координаты.
+    if (max_pos <= min_pos) // Если объект больше доступного диапазона или диапазон вырожден.
+    { // Начало обработки вырожденного диапазона.
+        *pos = min_pos; // Фиксируем позицию в единственной доступной точке.
+        *dir = 0; // Останавливаем движение по этой оси.
+        return; // Завершаем обработку оси.
+    } // Конец обработки вырожденного диапазона.
 
-    display_config_t cfg = {
-        .width  = WIDTH,
-        .height = HEIGHT,
-        .buffer_count = 1,
-        .mode = DISPLAY_MODE_SAFE,
-        .frame_done_cb = on_frame_done
+    *pos += *dir; // Двигаем объект на 1 пиксель по текущему направлению.
+    if (*pos < min_pos) // Проверяем удар о минимальную границу (верх/лево).
+    { // Начало отражения от минимальной границы.
+        *pos = min_pos + (min_pos - *pos); // Зеркально отражаем координату внутрь диапазона.
+        *dir = -*dir; // Инвертируем направление движения.
+    } // Конец отражения от минимальной границы.
+    else if (*pos > max_pos) // Проверяем удар о максимальную границу (низ/право).
+    { // Начало отражения от максимальной границы.
+        *pos = max_pos - (*pos - max_pos); // Зеркально отражаем координату внутрь диапазона.
+        *dir = -*dir; // Инвертируем направление движения.
+    } // Конец отражения от максимальной границы.
+} // Конец функции обновления координаты.
+
+static void on_frame_done(void) {} // Callback завершения DMA-кадра оставлен пустым (логика в main).
+
+int main() 
+{ 
+    stdio_init_all(); // Инициализируем стандартный ввод/вывод (UART/USB stdio при необходимости).
+
+    display_config_t cfg = { // Формируем конфигурацию дисплейного движка.
+        .width  = WIDTH, // Передаем ширину кадра.
+        .height = HEIGHT, // Передаем высоту кадра.
+        .buffer_count = 1, // Используем один буфер кадра (SAFE режим блокирует доступ при DMA).
+        .mode = DISPLAY_MODE_SAFE, // Выбираем безопасный режим работы буфера.
+        .frame_done_cb = on_frame_done // Регистрируем callback завершения кадра.
     };
 
-    display_init(&cfg);
-    const int64_t frame_period_us = -16667; /* 60 Hz, отрицательное значение = стабильный период */
-    bool timer_ok = add_repeating_timer_us(frame_period_us, frame_timer_cb, NULL, &frame_timer);
-    hard_assert(timer_ok);
+    display_init(&cfg); // Инициализируем дисплей и внутренний контекст по заданной конфигурации.
+    const int64_t frame_period_us = -16667; // Задаем период 60 Гц; отрицательное значение дает стабильный интервал.
+    bool timer_ok = add_repeating_timer_us(frame_period_us, frame_timer_cb, NULL, &frame_timer); // Запускаем периодический таймер.
+    hard_assert(timer_ok); // Останавливаемся в отладке, если таймер не создался.
 
-    float phase = 0.0f;
-    int text1_y = 90;
-    int text2_y = 110;
-    int text3_y = 130;
-    int text1_dy = 1;
-    int text2_dy = 1;
-    int text3_dy = 1;
+    float phase = 0.0f; // Фаза синусоиды для анимации волны.
+    const wchar_t* text1 = L"Проверка кириллицы"; // Текст первой строки.
+    const wchar_t* text2 = L"Proverka latinyanskogo"; // Текст второй строки.
+    const wchar_t* text3 = L"1234567890!@#$%%^&*()"; // Текст третьей строки.
+    const int text1_w = text_width_px(text1); // Фактическая ширина первой строки в пикселях.
+    const int text2_w = text_width_px(text2); // Фактическая ширина второй строки в пикселях.
+    const int text3_w = text_width_px(text3); // Фактическая ширина третьей строки в пикселях.
+    int text1_x = 50; // Начальная X-координата первой строки.
+    int text1_y = 90; // Начальная Y-координата первой строки.
+    int text2_x = 45; // Начальная X-координата второй строки.
+    int text2_y = 110; // Начальная Y-координата второй строки.
+    int text3_x = 35; // Начальная X-координата третьей строки.
+    int text3_y = 130; // Начальная Y-координата третьей строки.
+    int text1_dx = 1; // Горизонтальное направление первой строки: +1 вправо, -1 влево.
+    int text1_dy = 1; // Вертикальное направление первой строки: +1 вниз, -1 вверх.
+    int text2_dx = -1; // Горизонтальное направление второй строки.
+    int text2_dy = 1; // Вертикальное направление второй строки.
+    int text3_dx = 1; // Горизонтальное направление третьей строки.
+    int text3_dy = -1; // Вертикальное направление третьей строки.
 
-    render_ctx_t rc;
+    render_ctx_t rc; // Контекст рендера, который будет привязываться к текущему буферу кадра.
 
-    while (1)
-    {
-        display_poll();
-        if (!frame_tick_due)
-        {
-            wait_for_irq();
-            continue;
-        }
-        frame_tick_due = false;
+    while (1) // Бесконечный основной цикл приложения.
+    { // Начало тела основного цикла.
+        display_poll(); // Обрабатываем внутренние события дисплейного движка (например, frame_done flag).
+        if (!frame_tick_due) // Если тик таймера еще не пришел.
+        { // Начало ветки "тика нет".
+            wait_for_irq(); // Спим до прерывания, чтобы не крутить пустой busy-loop.
+            continue; // Переходим к следующей итерации цикла.
+        } // Конец ветки "тика нет".
+        frame_tick_due = false; // Сбрасываем флаг и разрешаем обработать ровно один кадр на этот тик.
 
-        /* Пропускаем кадр, если предыдущий ещё уходит по DMA */
-        if (!display_ready())
-        {
-            continue;
-        }
+        if (!display_ready()) // Если прошлый кадр все еще передается DMA на дисплей.
+        { // Начало ветки "дисплей занят".
+            continue; // Пропускаем этот кадр, не накапливая задержку.
+        } // Конец ветки "дисплей занят".
 
-        /* SAFE + 1 буфер: при display_ready() блокировки здесь уже не будет */
-        uint16_t* buf = display_get_draw_buffer();
-        render_begin(&rc, buf, WIDTH, HEIGHT);
+        uint16_t* buf = display_get_draw_buffer(); // Получаем буфер, в который разрешено рисовать текущий кадр.
+        render_begin(&rc, buf, WIDTH, HEIGHT); // Привязываем контекст рендера к буферу и размерам экрана.
 
-        render_clear(&rc, RGB16(9,19,9));
-        render_grid(&rc, 20, 20, 40, RGB16(12,26,13));
-        render_sine_wave(&rc, WIDTH*3, 100, 2.0f, 0, HEIGHT / 2, phase, RGB16(0,255,0));
-        draw_string(&rc, 50, text1_y, L"Проверка кириллицы", RGB565(255, 255, 255));
-        draw_string(&rc, 45, text2_y, L"Proverka latinyanskogo", RGB565(0, 0, 255));
-        draw_string(&rc, 35, text3_y, L"1234567890!@#$%%^&*()", RGB565(255, 0, 0));
+        render_clear(&rc, RGB16(9,19,9)); // Очищаем кадр темно-зеленым фоном.
+        render_grid(&rc, 20, 20, 40, RGB16(12,26,13)); // Рисуем фон-сетку с шагом и цветом.
+        render_sine_wave(&rc, WIDTH*3, 100, 2.0f, 0, HEIGHT / 2, phase, RGB16(0,255,0)); // Рисуем анимированную синусоиду.
+        draw_string(&rc, (uint16_t)text1_x, (uint16_t)text1_y, text1, RGB565(255, 255, 255)); // Рисуем первую строку по текущим X/Y.
+        draw_string(&rc, (uint16_t)text2_x, (uint16_t)text2_y, text2, RGB565(0, 0, 255)); // Рисуем вторую строку по текущим X/Y.
+        draw_string(&rc, (uint16_t)text3_x, (uint16_t)text3_y, text3, RGB565(255, 0, 0)); // Рисуем третью строку по текущим X/Y.
 
-        text1_y += text1_dy;
-        if (text1_y <= 0)
-        {
-            text1_y = 0;
-            text1_dy = 1;
-        }
-        else if (text1_y >= (HEIGHT - TEXT_H))
-        {
-            text1_y = HEIGHT - TEXT_H;
-            text1_dy = -1;
-        }
+        update_axis_reflect(&text1_x, &text1_dx, 0, WIDTH - text1_w); // Двигаем первую строку по X с отражением от левой/правой грани.
+        update_axis_reflect(&text1_y, &text1_dy, 0, HEIGHT - TEXT_H); // Двигаем первую строку по Y с отражением от верхней/нижней грани.
+        update_axis_reflect(&text2_x, &text2_dx, 0, WIDTH - text2_w); // Двигаем вторую строку по X с отражением от левой/правой грани.
+        update_axis_reflect(&text2_y, &text2_dy, 0, HEIGHT - TEXT_H); // Двигаем вторую строку по Y с отражением от верхней/нижней грани.
+        update_axis_reflect(&text3_x, &text3_dx, 0, WIDTH - text3_w); // Двигаем третью строку по X с отражением от левой/правой грани.
+        update_axis_reflect(&text3_y, &text3_dy, 0, HEIGHT - TEXT_H); // Двигаем третью строку по Y с отражением от верхней/нижней грани.
 
-        text2_y += text2_dy;
-        if (text2_y <= 0)
-        {
-            text2_y = 0;
-            text2_dy = 1;
-        }
-        else if (text2_y >= (HEIGHT - TEXT_H))
-        {
-            text2_y = HEIGHT - TEXT_H;
-            text2_dy = -1;
-        }
+        phase += 0.16f; // Продвигаем фазу синусоиды для плавной анимации.
+        if (phase > 6.2831853f) // Если фаза превысила 2*pi.
+        { // Начало нормализации фазы.
+            phase -= 6.2831853f; // Возвращаем фазу в базовый диапазон без скачка формы.
+        } // Конец нормализации фазы.
 
-        text3_y += text3_dy;
-        if (text3_y <= 0)
-        {
-            text3_y = 0;
-            text3_dy = 1;
-        }
-        else if (text3_y >= (HEIGHT - TEXT_H))
-        {
-            text3_y = HEIGHT - TEXT_H;
-            text3_dy = -1;
-        }
-
-        phase += 0.16f;
-        if (phase > 6.2831853f)
-        {
-            phase -= 6.2831853f;
-        }
-
-        display_submit();
-    }
-}
+        display_submit(); // Отправляем подготовленный кадр на вывод через DMA.
+    } // Конец тела основного цикла.
+} // Конец функции main.
