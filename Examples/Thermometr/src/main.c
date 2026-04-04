@@ -1,5 +1,5 @@
 #include "pico/stdlib.h" // Подключаем базовые функции SDK Pico (время, таймеры, sleep, assert).
-#include "display/display.h" // Подключаем API дисплейного движка (init/poll/submit/buffer).
+#include "display/display.h" // Подключаем API дисплейного движка (init + begin/end paint).
 #include "display/render/context.h" // Подключаем контекст рисования для примитивов.
 #include "display/render/grid.h" // Подключаем функцию рисования сетки.
 #include "display/render/sine_wave.h" // Подключаем функцию рисования синусоиды.
@@ -58,8 +58,6 @@ static void update_axis_reflect(int* pos, int* dir, int min_pos, int max_pos) //
     } 
 } 
 
-static void on_frame_done(void) {} // Callback завершения DMA-кадра оставлен пустым (логика в main).
-
 int main() 
 { 
     stdio_init_all(); // Инициализируем стандартный ввод/вывод (UART/USB stdio при необходимости).
@@ -69,7 +67,6 @@ int main()
         .height = HEIGHT, // Передаем высоту кадра.
         .buffer_count = 1, // Используем один буфер кадра (SAFE режим блокирует доступ при DMA).
         .mode = DISPLAY_MODE_SAFE, // Выбираем безопасный режим работы буфера.
-        .frame_done_cb = on_frame_done // Регистрируем callback завершения кадра.
     };
 
     display_init(&cfg); // Инициализируем дисплей и внутренний контекст по заданной конфигурации.
@@ -101,7 +98,6 @@ int main()
 
     while (1) // Бесконечный основной цикл приложения.
     { 
-        display_poll(); // Обрабатываем внутренние события дисплейного движка (например, frame_done flag).
         if (!frame_tick_due) // Если тик таймера еще не пришел.
         { 
             wait_for_irq(); // Спим до прерывания, чтобы не крутить пустой busy-loop.
@@ -109,8 +105,8 @@ int main()
         } 
         frame_tick_due = false; // Сбрасываем флаг и разрешаем обработать ровно один кадр на этот тик.
 
-        uint16_t* buf = display_try_acquire_draw_buffer(); // Пытаемся неблокирующе получить draw-буфер.
-        if (buf == NULL) // Если в SAFE+1 DMA еще занят, просто пропускаем тик кадра.
+        uint16_t* buf = display_begin_paint_try(); // Пытаемся начать новый кадр и получить буфер рисования.
+        if (buf == NULL) // Если кадр ещё выводится или paint уже начат, пропускаем этот тик.
         {
             continue;
         }
@@ -136,6 +132,7 @@ int main()
             phase -= 6.2831853f; // Возвращаем фазу в базовый диапазон без скачка формы.
         } 
 
-        display_submit(); // Отправляем подготовленный кадр на вывод через DMA.
+        bool submitted = display_end_paint(); // Завершаем paint-секцию и отправляем кадр.
+        hard_assert(submitted); // В этом сценарии отправка обязана проходить успешно.
     } 
 } 
