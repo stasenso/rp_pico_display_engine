@@ -4,6 +4,7 @@
 
 /* Display type identifiers used by DISPLAY_TYPE. */
 #define DISPLAY_TYPE_ST7789 1
+#define DISPLAY_TYPE_ILI9341 2
 
 #ifndef DISPLAY_TYPE
 #define DISPLAY_TYPE DISPLAY_TYPE_ST7789

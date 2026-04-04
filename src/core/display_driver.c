@@ -4,8 +4,6 @@
 #include "pico/stdlib.h"
 #include "hardware/spi.h"
 
-#if DISPLAY_TYPE == DISPLAY_TYPE_ST7789
-
 static inline void display_send_command(uint8_t cmd)
 {
     gpio_put(DISPLAY_PIN_DC, 0);
@@ -27,7 +25,7 @@ static inline void display_send_data_u8(uint8_t data)
     display_send_data_bytes(&data, 1);
 }
 
-static inline void st7789_set_window(uint16_t width, uint16_t height)
+static inline void display_set_window(uint16_t width, uint16_t height)
 {
     uint16_t x_end = (width > 0) ? (uint16_t)(width - 1u) : 0u;
     uint16_t y_end = (height > 0) ? (uint16_t)(height - 1u) : 0u;
@@ -45,6 +43,8 @@ static inline void st7789_set_window(uint16_t width, uint16_t height)
     window[3] = (uint8_t)y_end;
     display_send_data_bytes(window, sizeof(window));
 }
+
+#if DISPLAY_TYPE == DISPLAY_TYPE_ST7789
 
 void display_driver_panel_init(uint16_t width, uint16_t height)
 {
@@ -80,7 +80,7 @@ void display_driver_panel_init(uint16_t width, uint16_t height)
     display_send_command(0x3A); /* COLMOD */
     display_send_data_u8(0x55); /* RGB565 */
 
-    st7789_set_window(width, height);
+    display_set_window(width, height);
 
     display_send_command(0x21); /* INVON */
     display_send_command(0x29); /* DISPON */
@@ -89,18 +89,74 @@ void display_driver_panel_init(uint16_t width, uint16_t height)
 
 void display_driver_begin_frame_transfer(uint16_t width, uint16_t height)
 {
-    st7789_set_window(width, height);
+    display_set_window(width, height);
     display_send_command(0x2C); /* RAMWR */
 
     gpio_put(DISPLAY_PIN_DC, 1);
     gpio_put(DISPLAY_PIN_CS, 0);
 }
 
-void display_driver_end_frame_transfer(void)
+#elif DISPLAY_TYPE == DISPLAY_TYPE_ILI9341
+
+void display_driver_panel_init(uint16_t width, uint16_t height)
 {
+    gpio_set_function(DISPLAY_PIN_MOSI, GPIO_FUNC_SPI);
+    gpio_set_function(DISPLAY_PIN_SCK, GPIO_FUNC_SPI);
+
+    gpio_init(DISPLAY_PIN_CS);
+    gpio_init(DISPLAY_PIN_DC);
+    gpio_init(DISPLAY_PIN_RST);
+    gpio_init(DISPLAY_PIN_BL);
+    gpio_set_dir(DISPLAY_PIN_CS, GPIO_OUT);
+    gpio_set_dir(DISPLAY_PIN_DC, GPIO_OUT);
+    gpio_set_dir(DISPLAY_PIN_RST, GPIO_OUT);
+    gpio_set_dir(DISPLAY_PIN_BL, GPIO_OUT);
+
     gpio_put(DISPLAY_PIN_CS, 1);
+    gpio_put(DISPLAY_PIN_DC, 1);
+    gpio_put(DISPLAY_PIN_BL, 0);
+
+    gpio_put(DISPLAY_PIN_RST, 0);
+    sleep_ms(50);
+    gpio_put(DISPLAY_PIN_RST, 1);
+    sleep_ms(50);
+
+    display_send_command(0x01); /* SWRESET */
+    sleep_ms(150);
+    display_send_command(0x11); /* SLPOUT */
+    sleep_ms(150);
+
+    /*
+     * ILI9341 uses a different MADCTL layout than ST7789 for practical panel
+     * orientations; this value keeps 320x240 landscape without mirror and BGR.
+     */
+    display_send_command(0x36); /* MADCTL */
+    display_send_data_u8(0b11101000);
+
+    display_send_command(0x3A); /* PIXFMT */
+    display_send_data_u8(0x55); /* RGB565 */
+
+    display_set_window(width, height);
+
+    display_send_command(0x20); /* INVOFF */
+    display_send_command(0x29); /* DISPON */
+    gpio_put(DISPLAY_PIN_BL, 1);
+}
+
+void display_driver_begin_frame_transfer(uint16_t width, uint16_t height)
+{
+    display_set_window(width, height);
+    display_send_command(0x2C); /* RAMWR */
+
+    gpio_put(DISPLAY_PIN_DC, 1);
+    gpio_put(DISPLAY_PIN_CS, 0);
 }
 
 #else
 #error "Unsupported DISPLAY_TYPE. Add implementation in src/core/display_driver.c."
 #endif
+
+void display_driver_end_frame_transfer(void)
+{
+    gpio_put(DISPLAY_PIN_CS, 1);
+}
