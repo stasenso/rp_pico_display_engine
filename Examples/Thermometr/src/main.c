@@ -4,6 +4,7 @@
 #include "display/render/grid.h" // Подключаем функцию рисования сетки.
 #include "display/render/sine_wave.h" // Подключаем функцию рисования синусоиды.
 #include "Font/font_data.h" // Подключаем шрифты и draw_string.
+#include <wchar.h> // Подключаем swprintf для форматирования строки FPS.
 
 
 #define WIDTH   320 // Ширина экрана в пикселях.
@@ -93,6 +94,10 @@ int main()
     int text2_dy = 1; // Вертикальное направление второй строки.
     int text3_dx = -1; // Горизонтальное направление третьей строки.
     int text3_dy = -1; // Вертикальное направление третьей строки.
+    uint32_t fps_value = 0; // Текущее вычисленное значение FPS.
+    uint32_t fps_frame_count = 0; // Количество завершенных кадров в текущем окне измерения.
+    uint64_t fps_window_start_us = time_us_64(); // Время старта текущего окна измерения в микросекундах.
+    wchar_t fps_text[16] = L"FPS: 0"; // Буфер строки FPS для вывода в угол экрана.
 
     render_ctx_t rc; // Контекст рендера, который будет привязываться к текущему буферу кадра.
 
@@ -118,6 +123,7 @@ int main()
         draw_string(&rc, (uint16_t)text1_x, (uint16_t)text1_y, text1, RGB565(255, 255, 255)); // Рисуем первую строку по текущим X/Y.
         draw_string(&rc, (uint16_t)text2_x, (uint16_t)text2_y, text2, RGB565(0, 0, 255)); // Рисуем вторую строку по текущим X/Y.
         draw_string(&rc, (uint16_t)text3_x, (uint16_t)text3_y, text3, RGB565(255, 0, 0)); // Рисуем третью строку по текущим X/Y.
+        draw_string(&rc, 0, 0, fps_text, RGB565(255, 255, 0)); // Выводим текущее значение FPS в левый верхний угол.
 
         update_axis_reflect(&text1_x, &text1_dx, 0, WIDTH - text1_w); // Двигаем первую строку по X с отражением от левой/правой грани.
         update_axis_reflect(&text1_y, &text1_dy, 0, HEIGHT - TEXT_H); // Двигаем первую строку по Y с отражением от верхней/нижней грани.
@@ -134,5 +140,16 @@ int main()
 
         bool submitted = display_end_paint(); // Завершаем paint-секцию и отправляем кадр.
         hard_assert(submitted); // В этом сценарии отправка обязана проходить успешно.
+
+        fps_frame_count++; // Учитываем успешно отправленный кадр в статистике FPS.
+        uint64_t now_us = time_us_64(); // Фиксируем текущее время для проверки окна измерения.
+        uint64_t elapsed_us = now_us - fps_window_start_us; // Сколько прошло с начала окна измерения.
+        if (elapsed_us >= 1000000ULL) // Пересчитываем FPS примерно раз в секунду.
+        {
+            fps_value = (uint32_t)((fps_frame_count * 1000000ULL) / elapsed_us); // Средний FPS за окно.
+            (void)swprintf(fps_text, sizeof(fps_text) / sizeof(fps_text[0]), L"FPS: %lu", (unsigned long)fps_value); // Обновляем строку для отрисовки.
+            fps_frame_count = 0; // Начинаем новое окно измерения.
+            fps_window_start_us = now_us; // Сдвигаем старт окна на текущее время.
+        }
     } 
 } 
