@@ -8,10 +8,11 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE BOOL "Export compile_commands.json" F
 
 pico_sdk_init()
 
-add_executable(${PROJECT_NAME}
-    src/main.c
+add_library(display_engine STATIC
     ../../src/Font/font_data.c
     ../../src/core/display.c
+    ../../src/core/display_transport.c
+    ../../src/core/display_driver.c
     ../../src/render/context.c
     ../../src/render/line.c
     ../../src/render/grid.c
@@ -19,12 +20,12 @@ add_executable(${PROJECT_NAME}
     ../../src/render/bezier.c
 )
 
-target_include_directories(${PROJECT_NAME} PRIVATE
+target_include_directories(display_engine PUBLIC
     ../../include
     ../../include/display
 )
 
-target_link_libraries(${PROJECT_NAME}
+target_link_libraries(display_engine PUBLIC
     pico_stdlib
     hardware_spi
     hardware_dma
@@ -40,16 +41,26 @@ set(DISPLAY_PIN_CS 13)
 set(DISPLAY_PIN_DC 12)
 set(DISPLAY_PIN_RST 11)
 set(DISPLAY_PIN_BL 10)
+set(DISPLAY_TYPE DISPLAY_TYPE_ST7789)
 
-# Pass board pin mapping into display.c without editing engine sources.
-target_compile_definitions(${PROJECT_NAME} PRIVATE
-    SPI_PORT=${DISPLAY_SPI_PORT}
-    PIN_MOSI=${DISPLAY_PIN_MOSI}
-    PIN_SCK=${DISPLAY_PIN_SCK}
-    PIN_CS=${DISPLAY_PIN_CS}
-    PIN_DC=${DISPLAY_PIN_DC}
-    PIN_RST=${DISPLAY_PIN_RST}
-    PIN_BL=${DISPLAY_PIN_BL}
+# Pass display mapping into display backend without editing engine sources.
+target_compile_definitions(display_engine PUBLIC
+    DISPLAY_TYPE=${DISPLAY_TYPE}
+    DISPLAY_SPI_PORT=${DISPLAY_SPI_PORT}
+    DISPLAY_PIN_MOSI=${DISPLAY_PIN_MOSI}
+    DISPLAY_PIN_SCK=${DISPLAY_PIN_SCK}
+    DISPLAY_PIN_CS=${DISPLAY_PIN_CS}
+    DISPLAY_PIN_DC=${DISPLAY_PIN_DC}
+    DISPLAY_PIN_RST=${DISPLAY_PIN_RST}
+    DISPLAY_PIN_BL=${DISPLAY_PIN_BL}
+)
+
+add_executable(${PROJECT_NAME}
+    src/main.c
+)
+
+target_link_libraries(${PROJECT_NAME}
+    display_engine
 )
 
 pico_add_extra_outputs(${PROJECT_NAME})
