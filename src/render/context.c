@@ -1,5 +1,9 @@
 #include "display/render/context.h"
 #include <stdbool.h>
+#include "hardware/dma.h"
+
+static int render_clear_dma_chan = -1;
+static uint16_t render_clear_dma_color = 0;
 
 static inline bool in_clip(const render_ctx_t* ctx, int x, int y)
 {
@@ -71,6 +75,38 @@ void render_reset_clip(render_ctx_t* ctx)
 void render_clear(render_ctx_t* ctx, uint16_t color)
 {
     size_t total = (size_t)ctx->width * (size_t)ctx->height;
+    if (total == 0)
+    {
+        return;
+    }
+
+    if (render_clear_dma_chan < 0)
+    {
+        render_clear_dma_chan = dma_claim_unused_channel(false);
+    }
+
+    if (render_clear_dma_chan >= 0)
+    {
+        dma_channel_config c = dma_channel_get_default_config((uint)render_clear_dma_chan);
+        channel_config_set_transfer_data_size(&c, DMA_SIZE_16);
+        channel_config_set_read_increment(&c, false);
+        channel_config_set_write_increment(&c, true);
+        channel_config_set_dreq(&c, DREQ_FORCE);
+
+        render_clear_dma_color = color;
+
+        dma_channel_configure(
+            (uint)render_clear_dma_chan,
+            &c,
+            ctx->buf,
+            &render_clear_dma_color,
+            total,
+            true
+        );
+        dma_channel_wait_for_finish_blocking((uint)render_clear_dma_chan);
+        return;
+    }
+
     for (size_t i = 0; i < total; ++i)
     {
         ctx->buf[i] = color;
