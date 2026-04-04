@@ -27,6 +27,8 @@ typedef struct
 
     uint8_t draw_index;
     uint8_t scanout_index;
+    uint8_t pending_scanout_index;
+    bool pending_submit;
     bool paint_in_progress;
 
 } display_context_t;
@@ -269,6 +271,30 @@ static void hw_raise_cs(void)
     gpio_put(PIN_CS, 1);
 }
 
+/*
+ * Назначение:
+ *   Пытается запустить отложенный submit, если DMA уже освободился.
+ */
+static void display_kick_pending_if_possible(void)
+{
+    if (!ctx.pending_submit || ctx.dma_busy)
+    {
+        return;
+    }
+
+    /* Продвигаем отложенный кадр в scanout и возвращаем draw на второй буфер. */
+    ctx.scanout_index = ctx.pending_scanout_index;
+    if (ctx.buffer_count == 2)
+    {
+        ctx.draw_index = (uint8_t)(ctx.scanout_index ^ 1u);
+    }
+    ctx.pending_submit = false;
+
+    size_t pixels = (size_t)ctx.width * ctx.height;
+    ctx.dma_busy = true;
+    hw_start_dma(ctx.buffers[ctx.scanout_index], pixels);
+}
+
 
 /* ============================================================
    === Обработчик DMA IRQ (позже подключить к реальному IRQ)
@@ -346,9 +372,11 @@ void display_init(const display_config_t* cfg)
         memset(ctx.buffers[i], 0, bytes);
     }
 
-    /* На старте draw и scanout указывают на первый буфер. */
-    ctx.draw_index    = 0;
+    /* SAFE+double-buffer: draw и scanout должны смотреть на разные буферы. */
     ctx.scanout_index = 0;
+    ctx.draw_index = (ctx.mode == DISPLAY_MODE_SAFE && ctx.buffer_count == 2) ? 1u : 0u;
+    ctx.pending_scanout_index = 0;
+    ctx.pending_submit = false;
 
     /* DMA в начале свободен. */
     ctx.dma_busy = false;
@@ -371,6 +399,8 @@ void display_init(const display_config_t* cfg)
  */
 uint16_t* display_begin_paint_try(void)
 {
+    display_kick_pending_if_possible();
+
     if (ctx.paint_in_progress)
     {
         return NULL;
@@ -380,6 +410,14 @@ uint16_t* display_begin_paint_try(void)
     if (ctx.mode == DISPLAY_MODE_SAFE &&
         ctx.buffer_count == 1 &&
         ctx.dma_busy)
+    {
+        return NULL;
+    }
+
+    /* SAFE+double-buffer: при отложенном кадре свободного draw-буфера нет. */
+    if (ctx.mode == DISPLAY_MODE_SAFE &&
+        ctx.buffer_count == 2 &&
+        ctx.pending_submit)
     {
         return NULL;
     }
@@ -425,8 +463,8 @@ uint16_t* display_begin_paint_blocking(void)
  *   Завершает фазу рисования кадра и отправляет кадр на экран.
  *
  * Возвращаемое значение:
- *   bool - true, если кадр успешно передан в вывод.
- *   bool - false, если нарушен порядок begin/end или DMA занят.
+ *   bool - true, если кадр принят к выводу (запущен сразу или поставлен в очередь).
+ *   bool - false, если нарушен порядок begin/end или очередь уже заполнена.
  */
 bool display_end_paint(void)
 {
@@ -495,26 +533,41 @@ bool display_swap_buffers(void)
  *   Запускает отправку текущего готового кадра на экран.
  *
  * Возвращаемое значение:
- *   bool - true, если передача запущена.
- *   bool - false, если DMA уже активен или сейчас открыта paint-секция.
+ *   bool - true, если кадр принят (старт DMA или постановка в очередь SAFE+double-buffer).
+ *   bool - false, если сейчас открыта paint-секция, DMA занят в других режимах
+ *          или очередь SAFE+double-buffer уже заполнена.
  */
 bool display_submit(void)
 {
+    display_kick_pending_if_possible();
+
     /* Пока идёт paint-секция, submit допускается только через end_paint. */
     if (ctx.paint_in_progress)
         return false;
 
-    /* Нельзя стартовать новый кадр, пока текущий DMA ещё не завершён. */
-    if (ctx.dma_busy)
-        return false;
-
-    /* В SAFE+double-buffer автоматически делаем flip перед отправкой кадра. */
+    /* SAFE+double-buffer: при занятом DMA кадр ставится в очередь. */
     if (ctx.mode == DISPLAY_MODE_SAFE &&
         ctx.buffer_count == 2)
     {
-        uint8_t tmp = ctx.draw_index;
-        ctx.draw_index = ctx.scanout_index;
-        ctx.scanout_index = tmp;
+        if (ctx.dma_busy)
+        {
+            if (ctx.pending_submit)
+            {
+                return false;
+            }
+
+            ctx.pending_scanout_index = ctx.draw_index;
+            ctx.pending_submit = true;
+            return true;
+        }
+
+        ctx.scanout_index = ctx.draw_index;
+        ctx.draw_index = (uint8_t)(ctx.scanout_index ^ 1u);
+    }
+    else if (ctx.dma_busy)
+    {
+        /* Для остальных режимов submit во время DMA запрещён. */
+        return false;
     }
 
     /* Считаем количество пикселей для DMA-передачи. */
@@ -546,8 +599,10 @@ bool display_submit(void)
  */
 bool display_ready(void)
 {
-    /* Дисплей готов к новому submit, когда DMA не занят. */
-    return !ctx.dma_busy;
+    display_kick_pending_if_possible();
+
+    /* Готовность есть, когда нет активной DMA и нет отложенного кадра. */
+    return !ctx.dma_busy && !ctx.pending_submit;
 }
 
 
@@ -559,9 +614,15 @@ bool display_ready(void)
  */
 void display_wait(void)
 {
-    /* Блокирующее активное ожидание завершения DMA-передачи. */
-    while (ctx.dma_busy)
+    /* Ждём полного опустошения очереди кадров и завершения DMA. */
+    while (true)
     {
-        /* активное ожидание */
+        display_kick_pending_if_possible();
+        if (!ctx.dma_busy && !ctx.pending_submit)
+        {
+            break;
+        }
+
+        tight_loop_contents();
     }
 }
