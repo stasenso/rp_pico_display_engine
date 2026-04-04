@@ -98,7 +98,7 @@ int main()
         render_begin(&rc, buf, WIDTH, HEIGHT); // Привязываем контекст рендера к буферу и размерам экрана.
 
         render_clear(&rc, RGB16(9,19,9)); // Очищаем кадр темно-зеленым фоном.
-        render_grid(&rc, 20, 20, 40, RGB16(12,26,13)); // Рисуем фон-сетку с шагом и цветом.
+        render_grid(&rc, 10, 10, 20, RGB16(40,40,40)); // Рисуем фон-сетку с шагом и цветом.
         render_sine_wave(&rc, WIDTH*3, 100, 2.0f, 0, HEIGHT / 2, phase, RGB16(0,255,0)); // Рисуем анимированную синусоиду.
         draw_string(&rc, (uint16_t)text1_x, (uint16_t)text1_y, text1, RGB565(255, 255, 255)); // Рисуем первую строку по текущим X/Y.
         draw_string(&rc, (uint16_t)text2_x, (uint16_t)text2_y, text2, RGB565(0, 0, 255)); // Рисуем вторую строку по текущим X/Y.
