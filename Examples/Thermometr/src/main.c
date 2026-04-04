@@ -11,16 +11,6 @@
 #define HEIGHT  240 // Высота экрана в пикселях.
 #define TEXT_H  22 // Высота глифа шрифта для расчета нижней границы текста.
 
-static volatile bool frame_tick_due = false; // Флаг "пришел тик кадра", устанавливается в прерывании таймера.
-static repeating_timer_t frame_timer; // Дескриптор периодического таймера Pico SDK.
-
-static bool frame_timer_cb(repeating_timer_t* t) // Callback аппаратного периодического таймера.
-{ 
-    (void)t; // Параметр callback не используем, явно подавляем предупреждение компилятора.
-    frame_tick_due = true; // Помечаем, что можно обработать один кадр; лишние тики схлопываются.
-    return true; // Возвращаем true, чтобы таймер продолжал работать периодически.
-} 
-
 static inline void wait_for_irq(void) // Вспомогательная функция для энергосберегающего ожидания прерываний.
 { 
     __asm volatile ("wfi"); // Инструкция ARM Wait For Interrupt: CPU спит до любого IRQ.
@@ -71,10 +61,6 @@ int main()
     };
 
     display_init(&cfg); // Инициализируем дисплей и внутренний контекст по заданной конфигурации.
-    const int64_t frame_period_us = -16667; // Задаем период 60 Гц; отрицательное значение дает стабильный интервал.
-    bool timer_ok = add_repeating_timer_us(frame_period_us, frame_timer_cb, NULL, &frame_timer); // Запускаем периодический таймер.
-    hard_assert(timer_ok); // Останавливаемся в отладке, если таймер не создался.
-
     float phase = 0.0f; // Фаза синусоиды для анимации волны.
     const wchar_t* text1 = L"Проверка кириллицы"; // Текст первой строки.
     const wchar_t* text2 = L"Latin character check"; // Текст второй строки.
@@ -103,16 +89,10 @@ int main()
 
     while (1) // Бесконечный основной цикл приложения.
     { 
-        if (!frame_tick_due) // Если тик таймера еще не пришел.
-        { 
-            wait_for_irq(); // Спим до прерывания, чтобы не крутить пустой busy-loop.
-            continue; // Переходим к следующей итерации цикла.
-        } 
-        frame_tick_due = false; // Сбрасываем флаг и разрешаем обработать ровно один кадр на этот тик.
-
         uint16_t* buf = display_begin_paint_try(); // Пытаемся начать новый кадр и получить буфер рисования.
         if (buf == NULL) // Если кадр ещё выводится или paint уже начат, пропускаем этот тик.
         {
+            wait_for_irq(); // Спим до прерывания, чтобы не крутить пустой busy-loop.
             continue;
         }
         render_begin(&rc, buf, WIDTH, HEIGHT); // Привязываем контекст рендера к буферу и размерам экрана.
