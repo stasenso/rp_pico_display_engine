@@ -22,14 +22,12 @@ typedef struct
     display_mode_t mode;
 
     volatile bool dma_busy;
-    volatile bool frame_done_pending;
-
-    display_frame_done_cb_t frame_done_cb;
 
     uint16_t* buffers[DISPLAY_MAX_BUFFERS];
 
     uint8_t draw_index;
     uint8_t scanout_index;
+    bool paint_in_progress;
 
 } display_context_t;
 
@@ -65,6 +63,13 @@ static int dma_chan = -1;
 #define PIN_BL 12
 #endif
 
+/*
+ * Назначение:
+ *   Отправляет дисплею служебную команду (например, сброс или смену режима).
+ *
+ * Параметры:
+ *   cmd (uint8_t) - код команды ST7789, диапазон 0..255.
+ */
 static inline void st7789_send_command(uint8_t cmd)
 {
     /* DC=0: передаём байт команды контроллеру дисплея */
@@ -74,6 +79,14 @@ static inline void st7789_send_command(uint8_t cmd)
     gpio_put(PIN_CS, 1);
 }
 
+/*
+ * Назначение:
+ *   Отправляет дисплею набор данных, относящихся к последней команде.
+ *
+ * Параметры:
+ *   data (const uint8_t*) - указатель на буфер данных; должен быть валиден при len > 0.
+ *   len (size_t) - количество передаваемых байтов, диапазон 0..SIZE_MAX.
+ */
 static inline void st7789_send_data_bytes(const uint8_t* data, size_t len)
 {
     /* DC=1: передаём полезные данные команды */
@@ -83,11 +96,22 @@ static inline void st7789_send_data_bytes(const uint8_t* data, size_t len)
     gpio_put(PIN_CS, 1);
 }
 
+/*
+ * Назначение:
+ *   Отправляет дисплею один байт данных.
+ *
+ * Параметры:
+ *   data (uint8_t) - байт данных, диапазон 0..255.
+ */
 static inline void st7789_send_data_u8(uint8_t data)
 {
     st7789_send_data_bytes(&data, 1);
 }
 
+/*
+ * Назначение:
+ *   Пробрасывает аппаратное прерывание DMA в основной обработчик модуля дисплея.
+ */
 static void display_dma_irq_trampoline(void)
 {
     display_dma_irq_handler();
@@ -98,6 +122,14 @@ static void display_dma_irq_trampoline(void)
    === Абстракция оборудования (реализовать позже)
    ============================================================ */
 
+/*
+ * Назначение:
+ *   Полностью подготавливает железо для работы экрана: линии, SPI, контроллер и DMA.
+ *
+ * Параметры:
+ *   width (uint16_t) - ширина кадра в пикселях, диапазон 0..65535.
+ *   height (uint16_t) - высота кадра в пикселях, диапазон 0..65535.
+ */
 static void hw_init(uint16_t width, uint16_t height)
 {
     /* Максимально быстрый SPI для вывода кадров на ST7789 */
@@ -192,6 +224,14 @@ static void hw_init(uint16_t width, uint16_t height)
     gpio_put(PIN_BL, 1);
 }
 
+/*
+ * Назначение:
+ *   Готовит экран к приёму кадра и запускает быструю отправку пикселей через DMA.
+ *
+ * Параметры:
+ *   buffer (uint16_t*) - указатель на буфер пикселей RGB565; должен быть валиден.
+ *   pixel_count (size_t) - число пикселей для отправки, диапазон 0..SIZE_MAX.
+ */
 static void hw_start_dma(uint16_t* buffer, size_t pixel_count)
 {
     uint16_t x_end = (ctx.width > 0) ? (uint16_t)(ctx.width - 1u) : 0u;
@@ -220,6 +260,10 @@ static void hw_start_dma(uint16_t* buffer, size_t pixel_count)
     dma_channel_set_trans_count((uint)dma_chan, pixel_count * sizeof(uint16_t), true);
 }
 
+/*
+ * Назначение:
+ *   Завершает текущую передачу в экран, поднимая линию выбора устройства (CS).
+ */
 static void hw_raise_cs(void)
 {
     gpio_put(PIN_CS, 1);
@@ -230,18 +274,25 @@ static void hw_raise_cs(void)
    === Обработчик DMA IRQ (позже подключить к реальному IRQ)
    ============================================================ */
 
+/*
+ * Назначение:
+ *   Обрабатывает сигнал «кадр отправлен»: очищает флаг прерывания и помечает,
+ *   что DMA больше не занят.
+ */
 void display_dma_irq_handler(void)
 {
+    /* Проверяем, что DMA-канал действительно был выделен. */
     if (dma_chan >= 0)
     {
         /* Сбрасываем флаг IRQ у текущего DMA-канала */
         dma_hw->ints0 = 1u << (uint)dma_chan;
     }
 
+    /* Поднимаем CS, завершая SPI-транзакцию кадра. */
     hw_raise_cs();
 
+    /* Отмечаем, что DMA завершил передачу и шина свободна. */
     ctx.dma_busy = false;
-    ctx.frame_done_pending = true;
 }
 
 
@@ -249,24 +300,45 @@ void display_dma_irq_handler(void)
    === Публичный API
    ============================================================ */
 
+/*
+ * Назначение:
+ *   Запускает модуль дисплея: сохраняет настройки, создаёт буферы кадра и
+ *   подготавливает железо.
+ *
+ * Параметры:
+ *   cfg (const display_config_t*) - указатель на конфигурацию; не NULL.
+ *   Ожидаемые значения полей:
+ *     cfg->buffer_count (uint8_t): 1..DISPLAY_MAX_BUFFERS.
+ *     cfg->width (uint16_t): 0..65535.
+ *     cfg->height (uint16_t): 0..65535.
+ *     cfg->mode (display_mode_t): DISPLAY_MODE_SAFE или DISPLAY_MODE_RAW.
+ */
 void display_init(const display_config_t* cfg)
 {
+    /* Проверяем, что передан валидный указатель на конфигурацию. */
     assert(cfg != NULL);
+    /* Минимум один буфер обязателен. */
     assert(cfg->buffer_count >= 1);
+    /* Количество буферов не должно превышать лимит сборки. */
     assert(cfg->buffer_count <= DISPLAY_MAX_BUFFERS);
 
+    /* Полностью очищаем глобальный контекст перед инициализацией. */
     memset(&ctx, 0, sizeof(ctx));
 
+    /* Копируем размеры кадра из конфигурации. */
     ctx.width  = cfg->width;
     ctx.height = cfg->height;
 
+    /* Копируем режим и параметры буферизации. */
     ctx.buffer_count = cfg->buffer_count;
     ctx.mode         = cfg->mode;
-    ctx.frame_done_cb = cfg->frame_done_cb;
 
+    /* Считаем количество пикселей в одном кадре. */
     size_t pixels = (size_t)ctx.width * ctx.height;
+    /* Считаем объём одного буфера в байтах (RGB565 = 2 байта/пиксель). */
     size_t bytes  = pixels * sizeof(uint16_t);
 
+    /* Выделяем и обнуляем каждый кадровый буфер. */
     for (uint8_t i = 0; i < ctx.buffer_count; i++)
     {
         ctx.buffers[i] = malloc(bytes);
@@ -274,42 +346,72 @@ void display_init(const display_config_t* cfg)
         memset(ctx.buffers[i], 0, bytes);
     }
 
+    /* На старте draw и scanout указывают на первый буфер. */
     ctx.draw_index    = 0;
     ctx.scanout_index = 0;
 
+    /* DMA в начале свободен. */
     ctx.dma_busy = false;
-    ctx.frame_done_pending = false;
+    ctx.paint_in_progress = false;
 
+    /* Инициализируем аппаратный слой дисплея. */
     hw_init(ctx.width, ctx.height);
 }
 
 
 /* ------------------------------------------------------------ */
 
-uint16_t* display_try_acquire_draw_buffer(void)
+/*
+ * Назначение:
+ *   Пытается начать новую фазу рисования кадра и выдать буфер для отрисовки.
+ *
+ * Возвращаемое значение:
+ *   uint16_t* - буфер для рисования.
+ *   NULL - рисование уже начато ранее или буфер пока недоступен.
+ */
+uint16_t* display_begin_paint_try(void)
 {
-    if (ctx.mode == DISPLAY_MODE_SAFE &&
-        ctx.buffer_count == 1)
+    if (ctx.paint_in_progress)
     {
-        if (ctx.dma_busy)
-        {
-            return NULL;
-        }
+        return NULL;
     }
 
+    /* В SAFE+single-buffer нельзя рисовать, пока DMA читает тот же буфер. */
+    if (ctx.mode == DISPLAY_MODE_SAFE &&
+        ctx.buffer_count == 1 &&
+        ctx.dma_busy)
+    {
+        return NULL;
+    }
+
+    ctx.paint_in_progress = true;
     return ctx.buffers[ctx.draw_index];
 }
 
 
 /* ------------------------------------------------------------ */
 
-uint16_t* display_acquire_draw_buffer_blocking(void)
+/*
+ * Назначение:
+ *   Ждёт доступный буфер и начинает фазу рисования кадра.
+ *
+ * Параметры:
+ *   Нет.
+ *
+ * Возвращаемое значение:
+ *   uint16_t* - валидный буфер для рисования.
+ */
+uint16_t* display_begin_paint_blocking(void)
 {
+    /* Если paint уже начат, blocking-вызов здесь приведёт к вечному ожиданию. */
+    hard_assert(!ctx.paint_in_progress);
+
     uint16_t* buf = NULL;
 
     while (buf == NULL)
     {
-        buf = display_try_acquire_draw_buffer();
+        buf = display_begin_paint_try();
+        tight_loop_contents();
     }
 
     return buf;
@@ -318,48 +420,95 @@ uint16_t* display_acquire_draw_buffer_blocking(void)
 
 /* ------------------------------------------------------------ */
 
-uint16_t* display_get_draw_buffer(void)
+/*
+ * Назначение:
+ *   Завершает фазу рисования кадра и отправляет кадр на экран.
+ *
+ * Возвращаемое значение:
+ *   bool - true, если кадр успешно передан в вывод.
+ *   bool - false, если нарушен порядок begin/end или DMA занят.
+ */
+bool display_end_paint(void)
 {
-    return display_try_acquire_draw_buffer();
+    if (!ctx.paint_in_progress)
+    {
+        return false;
+    }
+
+    ctx.paint_in_progress = false;
+    return display_submit();
 }
 
 
-/* ------------------------------------------------------------ */
-
+/*
+ * Назначение:
+ *   Возвращает буфер, который сейчас выбран для показа на экране.
+ *
+ * Возвращаемое значение:
+ *   uint16_t* - указатель на текущий scanout-буфер.
+ */
 uint16_t* display_get_scanout_buffer(void)
 {
+    /* Возвращаем буфер, который назначен на вывод в DMA. */
     return ctx.buffers[ctx.scanout_index];
 }
 
 
 /* ------------------------------------------------------------ */
 
+/*
+ * Назначение:
+ *   Меняет местами «буфер рисования» и «буфер показа» вручную.
+ *
+ * Возвращаемое значение:
+ *   bool - true при успешном swap.
+ *   bool - false, если не RAW, меньше двух буферов или DMA занят.
+ */
 bool display_swap_buffers(void)
 {
+    /* Операция доступна только в RAW-режиме. */
     if (ctx.mode != DISPLAY_MODE_RAW)
         return false;
 
+    /* Для swap нужно минимум два буфера. */
     if (ctx.buffer_count < 2)
         return false;
 
+    /* Во время активной DMA-передачи менять роли буферов нельзя. */
     if (ctx.dma_busy)
         return false;
 
+    /* Меняем местами индексы draw и scanout. */
     uint8_t tmp = ctx.draw_index;
     ctx.draw_index = ctx.scanout_index;
     ctx.scanout_index = tmp;
 
+    /* Обмен выполнен успешно. */
     return true;
 }
 
 
 /* ------------------------------------------------------------ */
 
+/*
+ * Назначение:
+ *   Запускает отправку текущего готового кадра на экран.
+ *
+ * Возвращаемое значение:
+ *   bool - true, если передача запущена.
+ *   bool - false, если DMA уже активен или сейчас открыта paint-секция.
+ */
 bool display_submit(void)
 {
+    /* Пока идёт paint-секция, submit допускается только через end_paint. */
+    if (ctx.paint_in_progress)
+        return false;
+
+    /* Нельзя стартовать новый кадр, пока текущий DMA ещё не завершён. */
     if (ctx.dma_busy)
         return false;
 
+    /* В SAFE+double-buffer автоматически делаем flip перед отправкой кадра. */
     if (ctx.mode == DISPLAY_MODE_SAFE &&
         ctx.buffer_count == 2)
     {
@@ -368,49 +517,51 @@ bool display_submit(void)
         ctx.scanout_index = tmp;
     }
 
+    /* Считаем количество пикселей для DMA-передачи. */
     size_t pixels = (size_t)ctx.width * ctx.height;
 
+    /* Помечаем DMA как занятый до прихода IRQ завершения. */
     ctx.dma_busy = true;
 
+    /* Запускаем передачу scanout-буфера в дисплей. */
     hw_start_dma(
         ctx.buffers[ctx.scanout_index],
         pixels
     );
 
+    /* Запуск принят. */
     return true;
 }
 
 
 /* ------------------------------------------------------------ */
 
+/*
+ * Назначение:
+ *   Сообщает, свободен ли дисплей для отправки следующего кадра.
+ *
+ * Возвращаемое значение:
+ *   bool - true, если DMA не занят.
+ *   bool - false, если DMA выполняет передачу.
+ */
 bool display_ready(void)
 {
+    /* Дисплей готов к новому submit, когда DMA не занят. */
     return !ctx.dma_busy;
 }
 
 
 /* ------------------------------------------------------------ */
 
+/*
+ * Назначение:
+ *   Останавливает выполнение, пока текущий кадр полностью не уйдёт на экран.
+ */
 void display_wait(void)
 {
+    /* Блокирующее активное ожидание завершения DMA-передачи. */
     while (ctx.dma_busy)
     {
         /* активное ожидание */
-    }
-}
-
-
-/* ------------------------------------------------------------ */
-
-void display_poll(void)
-{
-    if (ctx.frame_done_pending)
-    {
-        ctx.frame_done_pending = false;
-
-        if (ctx.frame_done_cb)
-        {
-            ctx.frame_done_cb();
-        }
     }
 }
