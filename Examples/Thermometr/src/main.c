@@ -1,135 +1,97 @@
-#include "pico/stdlib.h" // Подключаем базовые функции SDK Pico (время, таймеры, sleep, assert).
-#include "display/display.h" // Подключаем API дисплейного движка (init + begin/end paint).
-#include "display/render/context.h" // Подключаем контекст рисования для примитивов.
-#include "display/render/grid.h" // Подключаем функцию рисования сетки.
-#include "display/render/sine_wave.h" // Подключаем функцию рисования синусоиды.
-#include "Font/font_data.h" // Подключаем шрифты и draw_string.
-#include <wchar.h> // Подключаем swprintf для форматирования строки FPS.
+#include "pico/stdlib.h"
+#include "display/display.h"
+#include "display/render/context.h"
+#include "Font/font_data.h"
+#include "dht22.h"
+#include <wchar.h>
 
+#define WIDTH   320
+#define HEIGHT  240
+#define DHT22_PIN 2
+#define DHT22_POLL_INTERVAL_US 2000000ULL
 
-#define WIDTH   320 // Ширина экрана в пикселях.
-#define HEIGHT  240 // Высота экрана в пикселях.
-#define TEXT_H  22 // Высота глифа шрифта для расчета нижней границы текста.
+static inline void wait_for_irq(void)
+{
+    __asm volatile ("wfi");
+}
 
-static inline void wait_for_irq(void) // Вспомогательная функция для энергосберегающего ожидания прерываний.
-{ 
-    __asm volatile ("wfi"); // Инструкция ARM Wait For Interrupt: CPU спит до любого IRQ.
-} 
+static const wchar_t* dht22_status_text(dht22_status_t status)
+{
+    switch (status)
+    {
+        case DHT22_OK: return L"DHT: OK";
+        case DHT22_TIMEOUT: return L"DHT: timeout";
+        case DHT22_CHECKSUM_ERROR: return L"DHT: crc error";
+        case DHT22_BUS_STUCK: return L"DHT: bus stuck";
+        default: return L"DHT: unknown";
+    }
+}
 
-static uint16_t text_width_px(const wchar_t* str) // Считаем фактическую ширину строки в пикселях через таблицу ширин глифов.
-{ 
-    uint16_t width = 0; // Накапливаем итоговую ширину строки.
-    while (*str) // Пока не дошли до нулевого терминатора строки.
-    { 
-        width = (uint16_t)(width + get_char_width(*str)); // Добавляем ширину текущего символа.
-        str++; // Переходим к следующему символу.
-    } 
-    return width; // Возвращаем итоговую ширину строки.
-} 
+int main()
+{
+    stdio_init_all();
 
-static void update_axis_reflect(int* pos, int* dir, int min_pos, int max_pos) // Обновляем одну координату с зеркальным отражением от границ.
-{ 
-    if (max_pos <= min_pos) // Если объект больше доступного диапазона или диапазон вырожден.
-    { 
-        *pos = min_pos; // Фиксируем позицию в единственной доступной точке.
-        *dir = 0; // Останавливаем движение по этой оси.
-        return; // Завершаем обработку оси.
-    } 
-
-    *pos += *dir; // Двигаем объект на 1 пиксель по текущему направлению.
-    if (*pos < min_pos) // Проверяем удар о минимальную границу (верх/лево).
-    { 
-        *pos = min_pos + (min_pos - *pos); // Зеркально отражаем координату внутрь диапазона.
-        *dir = -*dir; // Инвертируем направление движения.
-    } 
-    else if (*pos > max_pos) // Проверяем удар о максимальную границу (низ/право).
-    { 
-        *pos = max_pos - (*pos - max_pos); // Зеркально отражаем координату внутрь диапазона.
-        *dir = -*dir; // Инвертируем направление движения.
-    } 
-} 
-
-int main() 
-{ 
-    stdio_init_all(); // Инициализируем стандартный ввод/вывод (UART/USB stdio при необходимости).
-
-    display_config_t cfg = { // Формируем конфигурацию дисплейного движка.
-        .width  = WIDTH, // Передаем ширину кадра.
-        .height = HEIGHT, // Передаем высоту кадра.
-        .buffer_count = 1, // Используем один буфер кадра (SAFE режим блокирует доступ при DMA).
-        .mode = DISPLAY_MODE_SAFE, // Выбираем безопасный режим работы буфера.
+    display_config_t cfg = {
+        .width = WIDTH,
+        .height = HEIGHT,
+        .buffer_count = 1,
+        .mode = DISPLAY_MODE_SAFE,
     };
 
-    display_init(&cfg); // Инициализируем дисплей и внутренний контекст по заданной конфигурации.
-    float phase = 0.0f; // Фаза синусоиды для анимации волны.
-    const wchar_t* text1 = L"Проверка кириллицы"; // Текст первой строки.
-    const wchar_t* text2 = L"Latin character check"; // Текст второй строки.
-    const wchar_t* text3 = L"1234567890!@#$%^&*()"; // Текст третьей строки.
-    const int text1_w = text_width_px(text1); // Фактическая ширина первой строки в пикселях.
-    const int text2_w = text_width_px(text2); // Фактическая ширина второй строки в пикселях.
-    const int text3_w = text_width_px(text3); // Фактическая ширина третьей строки в пикселях.
-    int text1_x = 50; // Начальная X-координата первой строки.
-    int text1_y = 90; // Начальная Y-координата первой строки.
-    int text2_x = 45; // Начальная X-координата второй строки.
-    int text2_y = 110; // Начальная Y-координата второй строки.
-    int text3_x = 35; // Начальная X-координата третьей строки.
-    int text3_y = 130; // Начальная Y-координата третьей строки.
-    int text1_dx = 1; // Горизонтальное направление первой строки: +1 вправо, -1 влево.
-    int text1_dy = 1; // Вертикальное направление первой строки: +1 вниз, -1 вверх.
-    int text2_dx = -1; // Горизонтальное направление второй строки.
-    int text2_dy = 1; // Вертикальное направление второй строки.
-    int text3_dx = -1; // Горизонтальное направление третьей строки.
-    int text3_dy = -1; // Вертикальное направление третьей строки.
-    uint32_t fps_value = 0; // Текущее вычисленное значение FPS.
-    uint32_t fps_frame_count = 0; // Количество завершенных кадров в текущем окне измерения.
-    uint64_t fps_window_start_us = time_us_64(); // Время старта текущего окна измерения в микросекундах.
-    wchar_t fps_text[16] = L"FPS: 0"; // Буфер строки FPS для вывода в угол экрана.
+    display_init(&cfg);
 
-    render_ctx_t rc; // Контекст рендера, который будет привязываться к текущему буферу кадра.
+    render_ctx_t rc;
+    const wchar_t* title = L"Thermometr";
+    const wchar_t* subtitle = L"DHT22 data";
+    wchar_t temp_text[24] = L"T: --.- C";
+    wchar_t hum_text[24] = L"H: --.- %";
+    const wchar_t* dht_status = L"DHT: init";
+    bool dht_has_valid_data = false;
+    int16_t dht_temp_x10 = 0;
+    uint16_t dht_hum_x10 = 0;
+    uint64_t next_dht_poll_us = time_us_64();
 
-    while (1) // Бесконечный основной цикл приложения.
-    { 
-        uint16_t* buf = display_begin_paint_try(); // Пытаемся начать новый кадр и получить буфер рисования.
-        if (buf == NULL) // Если кадр ещё выводится или paint уже начат, пропускаем этот тик.
+    dht22_t dht;
+    dht22_init(&dht, pio0, 0, DHT22_PIN);
+
+    while (1)
+    {
+        uint64_t now_us = time_us_64();
+        if (now_us >= next_dht_poll_us)
         {
-            wait_for_irq(); // Спим до прерывания, чтобы не крутить пустой busy-loop.
+            dht22_status_t status = dht22_read(&dht, &dht_temp_x10, &dht_hum_x10);
+            dht_status = dht22_status_text(status);
+            if (status == DHT22_OK)
+            {
+                dht_has_valid_data = true;
+            }
+            next_dht_poll_us = now_us + DHT22_POLL_INTERVAL_US;
+        }
+
+        if (dht_has_valid_data)
+        {
+            uint16_t t_abs_x10 = (dht_temp_x10 < 0) ? (uint16_t)(-dht_temp_x10) : (uint16_t)dht_temp_x10;
+            wchar_t sign = (dht_temp_x10 < 0) ? L'-' : L'+';
+            (void)swprintf(temp_text, sizeof(temp_text) / sizeof(temp_text[0]), L"T: %lc%u.%u C", sign, (unsigned)(t_abs_x10 / 10u), (unsigned)(t_abs_x10 % 10u));
+            (void)swprintf(hum_text, sizeof(hum_text) / sizeof(hum_text[0]), L"H: %u.%u %%", (unsigned)(dht_hum_x10 / 10u), (unsigned)(dht_hum_x10 % 10u));
+        }
+
+        uint16_t* buf = display_begin_paint_try();
+        if (buf == NULL)
+        {
+            wait_for_irq();
             continue;
         }
-        render_begin(&rc, buf, WIDTH, HEIGHT); // Привязываем контекст рендера к буферу и размерам экрана.
 
-        render_clear(&rc, RGB16(9,19,9)); // Очищаем кадр темно-зеленым фоном.
-        render_grid(&rc, 10, 10, 20, RGB16(40,40,40)); // Рисуем фон-сетку с шагом и цветом.
-        render_sine_wave(&rc, WIDTH*3, 100, 2.0f, 0, HEIGHT / 2, phase, RGB16(0,255,0)); // Рисуем анимированную синусоиду.
-        draw_string(&rc, (uint16_t)text1_x, (uint16_t)text1_y, text1, RGB565(255, 255, 255)); // Рисуем первую строку по текущим X/Y.
-        draw_string(&rc, (uint16_t)text2_x, (uint16_t)text2_y, text2, RGB565(0, 0, 255)); // Рисуем вторую строку по текущим X/Y.
-        draw_string(&rc, (uint16_t)text3_x, (uint16_t)text3_y, text3, RGB565(255, 0, 0)); // Рисуем третью строку по текущим X/Y.
-        draw_string(&rc, 0, 0, fps_text, RGB565(255, 255, 0)); // Выводим текущее значение FPS в левый верхний угол.
+        render_begin(&rc, buf, WIDTH, HEIGHT);
+        render_clear(&rc, RGB16(8, 18, 8));
+        draw_string(&rc, 16, 16, title, RGB565(255, 255, 255));
+        draw_string(&rc, 16, 40, subtitle, RGB565(255, 220, 120));
+        draw_string(&rc, 16, 72, temp_text, RGB565(255, 255, 255));
+        draw_string(&rc, 16, 96, hum_text, RGB565(255, 255, 255));
+        draw_string(&rc, 16, 120, dht_status, RGB565(255, 200, 0));
 
-        update_axis_reflect(&text1_x, &text1_dx, 0, WIDTH - text1_w); // Двигаем первую строку по X с отражением от левой/правой грани.
-        update_axis_reflect(&text1_y, &text1_dy, 0, HEIGHT - TEXT_H); // Двигаем первую строку по Y с отражением от верхней/нижней грани.
-        update_axis_reflect(&text2_x, &text2_dx, 0, WIDTH - text2_w); // Двигаем вторую строку по X с отражением от левой/правой грани.
-        update_axis_reflect(&text2_y, &text2_dy, 0, HEIGHT - TEXT_H); // Двигаем вторую строку по Y с отражением от верхней/нижней грани.
-        update_axis_reflect(&text3_x, &text3_dx, 0, WIDTH - text3_w); // Двигаем третью строку по X с отражением от левой/правой грани.
-        update_axis_reflect(&text3_y, &text3_dy, 0, HEIGHT - TEXT_H); // Двигаем третью строку по Y с отражением от верхней/нижней грани.
-
-        phase += 0.16f; // Продвигаем фазу синусоиды для плавной анимации.
-        if (phase > 6.2831853f) // Если фаза превысила 2*pi.
-        { 
-            phase -= 6.2831853f; // Возвращаем фазу в базовый диапазон без скачка формы.
-        } 
-
-        bool submitted = display_end_paint(); // Завершаем paint-секцию и отправляем кадр.
-        hard_assert(submitted); // В этом сценарии отправка обязана проходить успешно.
-
-        fps_frame_count++; // Учитываем успешно отправленный кадр в статистике FPS.
-        uint64_t now_us = time_us_64(); // Фиксируем текущее время для проверки окна измерения.
-        uint64_t elapsed_us = now_us - fps_window_start_us; // Сколько прошло с начала окна измерения.
-        if (elapsed_us >= 1000000ULL) // Пересчитываем FPS примерно раз в секунду.
-        {
-            fps_value = (uint32_t)((fps_frame_count * 1000000ULL) / elapsed_us); // Средний FPS за окно.
-            (void)swprintf(fps_text, sizeof(fps_text) / sizeof(fps_text[0]), L"FPS: %lu", (unsigned long)fps_value); // Обновляем строку для отрисовки.
-            fps_frame_count = 0; // Начинаем новое окно измерения.
-            fps_window_start_us = now_us; // Сдвигаем старт окна на текущее время.
-        }
-    } 
-} 
+        bool submitted = display_end_paint();
+        hard_assert(submitted);
+    }
+}

@@ -59,10 +59,16 @@ target_compile_definitions(display_engine PUBLIC
 
 add_executable(${PROJECT_NAME}
     src/main.c
+    src/dht22.c
+)
+
+pico_generate_pio_header(${PROJECT_NAME}
+    ${CMAKE_CURRENT_LIST_DIR}/src/dht22.pio
 )
 
 target_link_libraries(${PROJECT_NAME}
     display_engine
+    hardware_pio
 )
 
 pico_add_extra_outputs(${PROJECT_NAME})

@@ -1,0 +1,19 @@
+.program dht22
+
+; Capture 40 bits from DHT22 by sampling each high pulse around 35us after rising edge.
+.wrap_target
+    wait 0 pin 0
+    wait 1 pin 0
+
+    set y, 4
+byte_loop:
+    set x, 7
+bit_loop:
+    wait 0 pin 0
+    wait 1 pin 0
+    nop [31]
+    nop [2]
+    in pins, 1
+    jmp x-- bit_loop
+    jmp y-- byte_loop
+.wrap
