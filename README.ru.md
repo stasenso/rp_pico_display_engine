@@ -22,7 +22,76 @@
 
 ## Быстрый старт
 
-### 1. Safe mode с одним дисплеем в цикле
+### 1. Подключение как subproject (рекомендуется)
+
+Практичный вариант интеграции: добавить этот репозиторий в проект (например, как git submodule) и собрать `display_engine` из вашего основного `CMakeLists.txt`.
+Подключать все примитивы сразу не обязательно: оставьте только нужные и раскомментируйте остальные позже.
+
+```cmake
+cmake_minimum_required(VERSION 3.18.4)
+include($ENV{PICO_SDK_PATH}/external/pico_sdk_import.cmake)
+
+project(my_app C CXX ASM)
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
+
+pico_sdk_init()
+
+set(DISPLAY_ENGINE_DIR ${CMAKE_CURRENT_LIST_DIR}/external/rp_pico_display_engine)
+
+add_library(display_engine STATIC
+    ${DISPLAY_ENGINE_DIR}/src/Font/font_data.c
+    ${DISPLAY_ENGINE_DIR}/src/core/display.c
+    ${DISPLAY_ENGINE_DIR}/src/core/display_transport.c
+    ${DISPLAY_ENGINE_DIR}/src/core/display_driver.c
+    ${DISPLAY_ENGINE_DIR}/src/render/context.c
+    ${DISPLAY_ENGINE_DIR}/src/render/line.c
+    # Раскомментируйте при необходимости:
+    # ${DISPLAY_ENGINE_DIR}/src/render/grid.c
+    # ${DISPLAY_ENGINE_DIR}/src/render/sine_wave.c
+    # ${DISPLAY_ENGINE_DIR}/src/render/bezier.c
+)
+
+target_include_directories(display_engine PUBLIC
+    ${DISPLAY_ENGINE_DIR}/include
+    ${DISPLAY_ENGINE_DIR}/include/display
+)
+
+target_link_libraries(display_engine PUBLIC
+    pico_stdlib
+    hardware_spi
+    hardware_dma
+    hardware_timer
+    pico_multicore
+)
+
+target_compile_definitions(display_engine PUBLIC
+    DISPLAY_TYPE=DISPLAY_TYPE_ST7789
+    DISPLAY_SPI_PORT=spi1
+    DISPLAY_PIN_MOSI=15
+    DISPLAY_PIN_SCK=14
+    DISPLAY_PIN_CS=13
+    DISPLAY_PIN_DC=12
+    DISPLAY_PIN_RST=11
+    DISPLAY_PIN_BL=10
+)
+
+add_executable(my_app src/main.c)
+target_link_libraries(my_app PRIVATE display_engine)
+pico_add_extra_outputs(my_app)
+```
+
+### 2. Как менять пины и тип дисплея
+
+Задавайте compile definitions на цели `display_engine`:
+
+- `DISPLAY_SPI_PORT` (`spi0` или `spi1`)
+- `DISPLAY_PIN_MOSI`, `DISPLAY_PIN_SCK`, `DISPLAY_PIN_CS`, `DISPLAY_PIN_DC`, `DISPLAY_PIN_RST`, `DISPLAY_PIN_BL`
+- `DISPLAY_TYPE` (`DISPLAY_TYPE_ST7789` или `DISPLAY_TYPE_ILI9341`)
+
+Если определения не заданы, используются значения по умолчанию из `src/core/display_driver.h`.
+
+### 3. Режим SAFE с одним буфером в цикле
 
 Подходит для простого цикла, где можно пропустить кадр, если буфер занят.
 
@@ -60,7 +129,7 @@ void app_loop(void) {
 }
 ```
 
-### 2. Safe mode с двумя дисплеями и возможным отложенным выводом
+### 4. Режим SAFE с двумя буферами и возможным отложенным выводом
 
 Режим `SAFE + buffer_count = 2`: пока DMA выводит один буфер, вы рисуете второй.  
 Если DMA занят в момент `display_end_paint()`, кадр может быть отложен (очередь на 1 pending-кадр).
@@ -100,25 +169,23 @@ void app_loop(void) {
 }
 ```
 
-### 3. Подключаемые `h`-файлы примитивов и шрифтов + пример вывода
+### 5. Заголовки примитивов и шрифтов + пример вывода
 
 Минимальный набор:
 
 ```c
 #include "display/display.h"
-#include "display/renderer.h"          // агрегирует context + line + grid + sine_wave + bezier
+#include "display/render/context.h"
+#include "display/render/line.h"
 #include "Font/font_data.h"            // draw_string(), draw_char(), get_char_width()
 ```
 
-Эквивалентно можно подключать по отдельности:
+Опциональные заголовки (раскомментируйте при необходимости):
 
 ```c
-#include "display/render/context.h"
-#include "display/render/line.h"
-#include "display/render/grid.h"
-#include "display/render/sine_wave.h"
-#include "display/render/bezier.h"
-#include "Font/font_data.h"
+// #include "display/render/grid.h"
+// #include "display/render/sine_wave.h"
+// #include "display/render/bezier.h"
 ```
 
 Пример рендера примитивов и текста:
@@ -128,13 +195,13 @@ render_ctx_t rc;
 render_begin(&rc, buf, 320, 240);
 
 render_clear(&rc, RGB16(9, 19, 9));
-render_grid(&rc, 20, 20, 40, RGB16(12, 26, 13));
 render_line(&rc, 0, 0, 319, 239, RGB16(255, 0, 0));
-render_sine_wave(&rc, 960, 100, 2.0f, 0, 120, phase, RGB16(0, 255, 0));
+// render_grid(&rc, 20, 20, 40, RGB16(12, 26, 13)); // раскомментируйте, если нужна сетка
+// render_sine_wave(&rc, 960, 100, 2.0f, 0, 120, phase, RGB16(0, 255, 0)); // раскомментируйте при необходимости
 
 int px[4] = {20, 80, 140, 220};
 int py[4] = {200, 120, 220, 160};
-render_bezier(&rc, px, py, 4, RGB16(255, 255, 0));
+// render_bezier(&rc, px, py, 4, RGB16(255, 255, 0)); // раскомментируйте при необходимости
 
 draw_string(&rc, 16, 16, L"Проверка кириллицы", RGB565(255, 255, 255));
 ```
@@ -148,8 +215,8 @@ cmake ..
 cmake --build .
 ```
 
-Пины дисплея задаются в `Examples/Thermometr/CMakeLists.txt` через `target_compile_definitions(...)`:
-`SPI_PORT`, `PIN_MOSI`, `PIN_SCK`, `PIN_CS`, `PIN_DC`, `PIN_RST`, `PIN_BL`.
+Конфигурация дисплея задаётся в `Examples/Thermometr/CMakeLists.txt` через `target_compile_definitions(...)`:
+`DISPLAY_TYPE`, `DISPLAY_SPI_PORT`, `DISPLAY_PIN_MOSI`, `DISPLAY_PIN_SCK`, `DISPLAY_PIN_CS`, `DISPLAY_PIN_DC`, `DISPLAY_PIN_RST`, `DISPLAY_PIN_BL`.
 
 ## Контракт API (важно)
 
