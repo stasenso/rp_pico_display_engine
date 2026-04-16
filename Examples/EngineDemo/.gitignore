@@ -1,0 +1,5 @@
+build*/
+!build*/
+build*/**
+!build*/*.elf
+!build*/*.uf2
