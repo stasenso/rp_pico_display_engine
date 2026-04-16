@@ -1,0 +1,18 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${env:PICO_SDK_PATH}/src/common/pico_stdlib_headers/include"
+            ],
+            "defines": [],
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "linux-clang-x64",
+            "configurationProvider": "ms-vscode.cmake-tools",
+            "compileCommands": "${workspaceFolder}/Examples/Thermometr/build/compile_commands.json"
+        }
+    ],
+    "version": 4
+}

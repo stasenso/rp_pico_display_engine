@@ -1,0 +1,41 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Pico RP2040 Debug",
+            "type": "cortex-debug",
+            "cwd": "${workspaceFolder}",
+            "executable": "${workspaceFolder}/build-rp2040/engine_demo_example.elf",
+
+            "request": "launch",
+            "servertype": "external",
+            "gdbPath": "gdb-multiarch",
+            "gdbTarget": "localhost:3333",
+            "svdFile": "${env:HOME}/pico/pico-sdk/src/rp2040/hardware_regs/RP2040.svd",
+            "runToEntryPoint": "main",
+            "postRestartCommands": [
+                "break main",
+                "continue"
+            ],
+            "showDevDebugOutput": "raw"
+        },
+        {
+            "name": "Pico 2 RP2350 Debug",
+            "type": "cortex-debug",
+            "cwd": "${workspaceFolder}",
+            "executable": "${workspaceFolder}/build-rp2350/engine_demo_example.elf",
+
+            "request": "launch",
+            "servertype": "external",
+            "gdbPath": "gdb-multiarch",
+            "gdbTarget": "localhost:3333",
+            "svdFile": "${env:HOME}/pico/pico-sdk/src/rp2350/hardware_regs/RP2350.svd",
+            "runToEntryPoint": "main",
+            "postRestartCommands": [
+                "break main",
+                "continue"
+            ],
+            "showDevDebugOutput": "raw"
+        }
+    ]
+}

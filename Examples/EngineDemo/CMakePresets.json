@@ -1,0 +1,41 @@
+{
+    "version": 3,
+    "configurePresets": [
+        {
+            "name": "rp2040",
+            "displayName": "RP2040 / Pico",
+            "generator": "Unix Makefiles",
+            "binaryDir": "${sourceDir}/build-rp2040",
+            "cacheVariables": {
+                "PICO_BOARD": "pico",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            }
+        },
+        {
+            "name": "rp2350",
+            "displayName": "RP2350 / Pico 2",
+            "generator": "Unix Makefiles",
+            "binaryDir": "${sourceDir}/build-rp2350",
+            "cacheVariables": {
+                "PICO_BOARD": "pico2",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "rp2040",
+            "configurePreset": "rp2040",
+            "targets": [
+                "engine_demo_example"
+            ]
+        },
+        {
+            "name": "rp2350",
+            "configurePreset": "rp2350",
+            "targets": [
+                "engine_demo_example"
+            ]
+        }
+    ]
+}

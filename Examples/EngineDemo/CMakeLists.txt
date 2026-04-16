@@ -1,4 +1,9 @@
 cmake_minimum_required(VERSION 3.18.4)
+
+if(NOT DEFINED PICO_BOARD)
+    set(PICO_BOARD pico2 CACHE STRING "Target board")
+endif()
+
 include($ENV{PICO_SDK_PATH}/external/pico_sdk_import.cmake)
 
 project(engine_demo_example C CXX ASM)
