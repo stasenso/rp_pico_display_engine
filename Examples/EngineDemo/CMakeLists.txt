@@ -52,7 +52,7 @@ set(DISPLAY_PIN_DC 12)
 set(DISPLAY_PIN_RST 11)
 set(DISPLAY_PIN_BL 10)
 # Available values: DISPLAY_TYPE_ST7789, DISPLAY_TYPE_ILI9341
-set(DISPLAY_TYPE "DISPLAY_TYPE_ILI9341" CACHE STRING "Display controller backend")
+set(DISPLAY_TYPE "DISPLAY_TYPE_ST7789" CACHE STRING "Display controller backend")
 set_property(CACHE DISPLAY_TYPE PROPERTY STRINGS DISPLAY_TYPE_ST7789 DISPLAY_TYPE_ILI9341)
 
 # Pass display mapping into display backend without editing engine sources.

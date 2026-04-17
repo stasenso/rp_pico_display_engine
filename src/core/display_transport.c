@@ -9,7 +9,7 @@ static int dma_chan = -1;
 
 void display_transport_init(uint16_t width, uint16_t height, irq_handler_t dma_irq_handler)
 {
-    spi_init(DISPLAY_SPI_PORT, 1000 * 100 * 75); /* 7.5 MHz */
+    spi_init(DISPLAY_SPI_PORT, 1000 * 100 * 625); /* 150 MHz */
     spi_set_format(
         DISPLAY_SPI_PORT,
         8,
