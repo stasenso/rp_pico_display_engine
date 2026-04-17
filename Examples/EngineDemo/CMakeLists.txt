@@ -1,7 +1,12 @@
 cmake_minimum_required(VERSION 3.18.4)
 
-if(NOT DEFINED PICO_BOARD)
-    set(PICO_BOARD pico2 CACHE STRING "Target board")
+set(TARGET_BOARD "pico2_RP2350" CACHE STRING "Target board")
+set_property(CACHE TARGET_BOARD PROPERTY STRINGS pico_RP2040 pico2_RP2350)
+
+if(TARGET_BOARD STREQUAL "pico_RP2040")
+    set(PICO_BOARD pico CACHE STRING "Pico SDK target board" FORCE)
+elseif(TARGET_BOARD STREQUAL "pico2_RP2350")
+    set(PICO_BOARD pico2 CACHE STRING "Pico SDK target board" FORCE)
 endif()
 
 include($ENV{PICO_SDK_PATH}/external/pico_sdk_import.cmake)

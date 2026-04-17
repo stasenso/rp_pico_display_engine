@@ -2,40 +2,96 @@
     "version": 3,
     "configurePresets": [
         {
-            "name": "rp2040",
-            "displayName": "RP2040 / Pico",
+            "name": "base",
+            "hidden": true,
             "generator": "Unix Makefiles",
-            "binaryDir": "${sourceDir}/build-rp2040",
             "cacheVariables": {
-                "PICO_BOARD": "pico",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
             }
         },
         {
-            "name": "rp2350",
-            "displayName": "RP2350 / Pico 2",
-            "generator": "Unix Makefiles",
-            "binaryDir": "${sourceDir}/build-rp2350",
+            "name": "rp2040",
+            "hidden": true,
             "cacheVariables": {
-                "PICO_BOARD": "pico2",
-                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+                "TARGET_BOARD": "pico_RP2040"
+            }
+        },
+        {
+            "name": "rp2350",
+            "hidden": true,
+            "cacheVariables": {
+                "TARGET_BOARD": "pico2_RP2350"
+            }
+        },
+        {
+            "name": "pico-debug",
+            "displayName": "Pico RP2040 Debug",
+            "inherits": [
+                "base",
+                "rp2040"
+            ],
+            "binaryDir": "${sourceDir}/build-pico-Debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "pico-release",
+            "displayName": "Pico RP2040 Release",
+            "inherits": [
+                "base",
+                "rp2040"
+            ],
+            "binaryDir": "${sourceDir}/build-pico-Release",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        },
+        {
+            "name": "pico2-debug",
+            "displayName": "Pico 2 RP2350 Debug",
+            "inherits": [
+                "base",
+                "rp2350"
+            ],
+            "binaryDir": "${sourceDir}/build-pico2-Debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "pico2-release",
+            "displayName": "Pico 2 RP2350 Release",
+            "inherits": [
+                "base",
+                "rp2350"
+            ],
+            "binaryDir": "${sourceDir}/build-pico2-Release",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
             }
         }
     ],
     "buildPresets": [
         {
-            "name": "rp2040",
-            "configurePreset": "rp2040",
-            "targets": [
-                "engine_demo_example"
-            ]
+            "name": "pico-debug",
+            "displayName": "Build Pico RP2040 Debug",
+            "configurePreset": "pico-debug"
         },
         {
-            "name": "rp2350",
-            "configurePreset": "rp2350",
-            "targets": [
-                "engine_demo_example"
-            ]
+            "name": "pico-release",
+            "displayName": "Build Pico RP2040 Release",
+            "configurePreset": "pico-release"
+        },
+        {
+            "name": "pico2-debug",
+            "displayName": "Build Pico 2 RP2350 Debug",
+            "configurePreset": "pico2-debug"
+        },
+        {
+            "name": "pico2-release",
+            "displayName": "Build Pico 2 RP2350 Release",
+            "configurePreset": "pico2-release"
         }
     ]
 }

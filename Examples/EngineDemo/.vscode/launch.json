@@ -5,7 +5,7 @@
             "name": "Pico RP2040 Debug",
             "type": "cortex-debug",
             "cwd": "${workspaceFolder}",
-            "executable": "${workspaceFolder}/build-rp2040/engine_demo_example.elf",
+            "executable": "${workspaceFolder}/build-pico-Debug/engine_demo_example.elf",
 
             "request": "launch",
             "servertype": "external",
@@ -23,7 +23,7 @@
             "name": "Pico 2 RP2350 Debug",
             "type": "cortex-debug",
             "cwd": "${workspaceFolder}",
-            "executable": "${workspaceFolder}/build-rp2350/engine_demo_example.elf",
+            "executable": "${workspaceFolder}/build-pico2-Debug/engine_demo_example.elf",
 
             "request": "launch",
             "servertype": "external",
