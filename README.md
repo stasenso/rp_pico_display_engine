@@ -77,6 +77,10 @@ Create the root `CMakeLists.txt`:
 ```bash
 cat > CMakeLists.txt <<'EOF'
 cmake_minimum_required(VERSION 3.18.4)
+
+# Change to `pico` for RP2040-based boards or keep `pico2` for Pico 2 / RP2350.
+set(PICO_BOARD pico2 CACHE STRING "Pico SDK target board")
+
 include($ENV{PICO_SDK_PATH}/external/pico_sdk_import.cmake)
 
 project(my_app C CXX ASM)

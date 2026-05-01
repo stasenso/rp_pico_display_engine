@@ -77,6 +77,10 @@ export PICO_SDK_PATH=/absolute/path/to/pico-sdk
 ```bash
 cat > CMakeLists.txt <<'EOF'
 cmake_minimum_required(VERSION 3.18.4)
+
+# Замените на `pico` для плат на RP2040 или оставьте `pico2` для Pico 2 / RP2350.
+set(PICO_BOARD pico2 CACHE STRING "Pico SDK target board")
+
 include($ENV{PICO_SDK_PATH}/external/pico_sdk_import.cmake)
 
 project(my_app C CXX ASM)
