@@ -314,7 +314,13 @@ cmake ..
 cmake --build .
 ```
 
-Этот пример собирается для стандартной платы Pico SDK, если вы явно не зададите `PICO_BOARD`. Конфигурация дисплея задаётся в [Examples/Thermometr/CMakeLists.txt](/home/smikhai/repo/rp_pico_display_engine/Examples/Thermometr/CMakeLists.txt:1):
+В этом примере целевая плата задаётся прямо в [Examples/Thermometr/CMakeLists.txt](/home/smikhai/repo/rp_pico_display_engine/Examples/Thermometr/CMakeLists.txt:1). Чтобы переключить плату, измените строку:
+
+```cmake
+set(PICO_BOARD pico2 CACHE STRING "Pico SDK target board")
+```
+
+Используйте `pico` для Pico на RP2040 или `pico2` для Pico 2 на RP2350. Конфигурация дисплея в этом же файле:
 
 - Контроллер: `DISPLAY_TYPE_ILI9341`
 - SPI порт: `spi1`
@@ -327,7 +333,7 @@ cmake --build .
 
 Также есть [Examples/EngineDemo/CMakeLists.txt](/home/smikhai/repo/rp_pico_display_engine/Examples/EngineDemo/CMakeLists.txt:1), где по умолчанию выбрано:
 
-- Плата: `Pico 2` / `RP2350` (`TARGET_BOARD=pico2_RP2350`)
+- Плата: `Pico 2` / `RP2350` (`PICO_BOARD=pico2`)
 - Контроллер: `DISPLAY_TYPE_ST7789`
 - SPI порт: `spi1`
 - `MOSI=15`

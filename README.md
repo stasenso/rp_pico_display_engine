@@ -314,7 +314,13 @@ cmake ..
 cmake --build .
 ```
 
-This example builds firmware for the Pico SDK default board unless you set `PICO_BOARD` yourself. The display configuration is set in [Examples/Thermometr/CMakeLists.txt](/home/smikhai/repo/rp_pico_display_engine/Examples/Thermometr/CMakeLists.txt:1):
+This example sets the target board directly in [Examples/Thermometr/CMakeLists.txt](/home/smikhai/repo/rp_pico_display_engine/Examples/Thermometr/CMakeLists.txt:1). To switch boards, change:
+
+```cmake
+set(PICO_BOARD pico2 CACHE STRING "Pico SDK target board")
+```
+
+Use `pico` for RP2040-based Pico or `pico2` for RP2350-based Pico 2. The display configuration in the same file is:
 
 - Controller: `DISPLAY_TYPE_ILI9341`
 - SPI port: `spi1`
@@ -327,7 +333,7 @@ This example builds firmware for the Pico SDK default board unless you set `PICO
 
 There is also [Examples/EngineDemo/CMakeLists.txt](/home/smikhai/repo/rp_pico_display_engine/Examples/EngineDemo/CMakeLists.txt:1), which defaults to:
 
-- Board: `Pico 2` / `RP2350` (`TARGET_BOARD=pico2_RP2350`)
+- Board: `Pico 2` / `RP2350` (`PICO_BOARD=pico2`)
 - Controller: `DISPLAY_TYPE_ST7789`
 - SPI port: `spi1`
 - `MOSI=15`
