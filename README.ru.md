@@ -35,7 +35,7 @@
 - `DISPLAY_TYPE_ST7789`
 - `DISPLAY_TYPE_ILI9341`
 
-Если не передавать compile definitions для дисплея, библиотека использует значения по умолчанию из [src/core/display_driver.h](/home/smikhai/repo/rp_pico_display_engine/src/core/display_driver.h:1):
+Если не передавать compile definitions для дисплея, библиотека использует значения по умолчанию из [`src/core/display_driver.h`](src/core/display_driver.h):
 
 - Контроллер: `DISPLAY_TYPE_ST7789`
 - SPI порт: `spi0`
@@ -50,9 +50,9 @@
 
 ## Быстрый старт
 
-### 1. Подключение как subproject (рекомендуется)
+### 1. Подключение исходников через git submodule (рекомендуется)
 
-Практичный вариант интеграции: добавить этот репозиторий в проект (например, как git submodule) и собрать `display_engine` из вашего основного `CMakeLists.txt`.
+Практичный вариант интеграции: добавить этот репозиторий в проект как вендорную зависимость через `git submodule` и собрать `display_engine` из вашего основного `CMakeLists.txt`.
 Подключать все примитивы сразу не обязательно: оставьте только нужные и раскомментируйте остальные позже.
 
 Создайте новый проект и добавьте библиотеку как submodule:
@@ -181,7 +181,7 @@ cmake --build build
 - `DISPLAY_PIN_MOSI`, `DISPLAY_PIN_SCK`, `DISPLAY_PIN_CS`, `DISPLAY_PIN_DC`, `DISPLAY_PIN_RST`, `DISPLAY_PIN_BL`
 - `DISPLAY_TYPE` (`DISPLAY_TYPE_ST7789` или `DISPLAY_TYPE_ILI9341`)
 
-Если определения не заданы, используются такие значения по умолчанию из [src/core/display_driver.h](/home/smikhai/repo/rp_pico_display_engine/src/core/display_driver.h:1):
+Если определения не заданы, используются такие значения по умолчанию из [`src/core/display_driver.h`](src/core/display_driver.h):
 
 - `DISPLAY_TYPE=DISPLAY_TYPE_ST7789`
 - `DISPLAY_SPI_PORT=spi0`
@@ -318,7 +318,7 @@ cmake ..
 cmake --build .
 ```
 
-В этом примере целевая плата задаётся прямо в [Examples/Thermometr/CMakeLists.txt](/home/smikhai/repo/rp_pico_display_engine/Examples/Thermometr/CMakeLists.txt:1). Чтобы переключить плату, измените строку:
+В этом примере целевая плата задаётся прямо в [`Examples/Thermometr/CMakeLists.txt`](Examples/Thermometr/CMakeLists.txt). Чтобы переключить плату, измените строку:
 
 ```cmake
 set(PICO_BOARD pico2 CACHE STRING "Pico SDK target board")
@@ -335,7 +335,7 @@ set(PICO_BOARD pico2 CACHE STRING "Pico SDK target board")
 - `RST=11`
 - `BL=10`
 
-Также есть [Examples/EngineDemo/CMakeLists.txt](/home/smikhai/repo/rp_pico_display_engine/Examples/EngineDemo/CMakeLists.txt:1), где по умолчанию выбрано:
+Также есть [`Examples/EngineDemo/CMakeLists.txt`](Examples/EngineDemo/CMakeLists.txt), где по умолчанию выбрано:
 
 - Плата: `Pico 2` / `RP2350` (`PICO_BOARD=pico2`)
 - Контроллер: `DISPLAY_TYPE_ST7789`
@@ -355,4 +355,4 @@ set(PICO_BOARD pico2 CACHE STRING "Pico SDK target board")
 - Нельзя открывать второй `begin`, пока не закрыт первый
 - Не вызывайте `display_submit()` вручную внутри открытой paint-секции
 
-Подробные сценарии: `SCENARIOS.ru.md`.
+Подробные сценарии описаны в [`SCENARIOS.ru.md`](SCENARIOS.ru.md).

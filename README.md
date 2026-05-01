@@ -35,7 +35,7 @@ Supported controller backends:
 - `DISPLAY_TYPE_ST7789`
 - `DISPLAY_TYPE_ILI9341`
 
-If you do not pass any display-related compile definitions, the library defaults from [src/core/display_driver.h](/home/smikhai/repo/rp_pico_display_engine/src/core/display_driver.h:1) are used:
+If you do not pass any display-related compile definitions, the library defaults from [`src/core/display_driver.h`](src/core/display_driver.h) are used:
 
 - Controller: `DISPLAY_TYPE_ST7789`
 - SPI port: `spi0`
@@ -50,9 +50,9 @@ These defaults mean: if you build without overriding pins or `DISPLAY_TYPE`, the
 
 ## Quick Start
 
-### 1. Add as a subproject (recommended)
+### 1. Add as vendored sources via git submodule (recommended)
 
-The most practical integration pattern is to add this repository (for example, as a git submodule) and build `display_engine` from your main `CMakeLists.txt`.
+The most practical integration pattern is to add this repository as a vendored dependency (for example, as a git submodule) and build `display_engine` from your main `CMakeLists.txt`.
 You do not have to include all rendering primitives immediately: keep only what you need and uncomment extra modules later.
 
 Create a new project and add this repository as a submodule:
@@ -181,7 +181,7 @@ Set these compile definitions on `display_engine`:
 - `DISPLAY_PIN_MOSI`, `DISPLAY_PIN_SCK`, `DISPLAY_PIN_CS`, `DISPLAY_PIN_DC`, `DISPLAY_PIN_RST`, `DISPLAY_PIN_BL`
 - `DISPLAY_TYPE` (`DISPLAY_TYPE_ST7789` or `DISPLAY_TYPE_ILI9341`)
 
-If no definitions are provided, these defaults from [src/core/display_driver.h](/home/smikhai/repo/rp_pico_display_engine/src/core/display_driver.h:1) are used:
+If no definitions are provided, these defaults from [`src/core/display_driver.h`](src/core/display_driver.h) are used:
 
 - `DISPLAY_TYPE=DISPLAY_TYPE_ST7789`
 - `DISPLAY_SPI_PORT=spi0`
@@ -318,7 +318,7 @@ cmake ..
 cmake --build .
 ```
 
-This example sets the target board directly in [Examples/Thermometr/CMakeLists.txt](/home/smikhai/repo/rp_pico_display_engine/Examples/Thermometr/CMakeLists.txt:1). To switch boards, change:
+This example sets the target board directly in [`Examples/Thermometr/CMakeLists.txt`](Examples/Thermometr/CMakeLists.txt). To switch boards, change:
 
 ```cmake
 set(PICO_BOARD pico2 CACHE STRING "Pico SDK target board")
@@ -335,7 +335,7 @@ Use `pico` for RP2040-based Pico or `pico2` for RP2350-based Pico 2. The display
 - `RST=11`
 - `BL=10`
 
-There is also [Examples/EngineDemo/CMakeLists.txt](/home/smikhai/repo/rp_pico_display_engine/Examples/EngineDemo/CMakeLists.txt:1), which defaults to:
+There is also [`Examples/EngineDemo/CMakeLists.txt`](Examples/EngineDemo/CMakeLists.txt), which defaults to:
 
 - Board: `Pico 2` / `RP2350` (`PICO_BOARD=pico2`)
 - Controller: `DISPLAY_TYPE_ST7789`
@@ -355,4 +355,4 @@ So the produced `.uf2` must be flashed to the board selected by that example's C
 - Do not call a second `begin` until the current paint section is closed
 - Do not call `display_submit()` manually inside an open paint section
 
-Detailed usage scenarios: `SCENARIOS.ru.md`.
+Detailed usage scenarios are documented in Russian in [`SCENARIOS.ru.md`](SCENARIOS.ru.md).
