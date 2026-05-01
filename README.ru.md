@@ -1,6 +1,6 @@
 # RP Pico Display Engine
 
-Лёгкий C-движок вывода для `RP2040/RP2350` и дисплеев `ST7789` (SPI + DMA) с явным контрактом кадра `begin/end paint`.
+Лёгкий C-движок вывода для `RP2040/RP2350` и дисплеев `ST7789` / `ILI9341` (SPI + DMA) с явным контрактом кадра `begin/end paint`.
 
 ## Возможности
 
@@ -20,6 +20,34 @@
 - `include/Font/`, `src/Font/` - данные шрифта и текстовый рендер
 - `Examples/Thermometr/` - рабочий пример проекта на Pico SDK
 
+## Что должно быть установлено заранее
+
+- `git`
+- `cmake` версии `3.18.4+`
+- средство сборки, которое поддерживает CMake (`make` по умолчанию на Unix-подобных системах)
+- `Pico SDK` и переменная окружения `PICO_SDK_PATH`, указывающая на него
+- ARM toolchain `arm-none-eabi-gcc`
+
+## Поддерживаемые дисплеи и wiring по умолчанию
+
+Поддерживаются два backend-контроллера:
+
+- `DISPLAY_TYPE_ST7789`
+- `DISPLAY_TYPE_ILI9341`
+
+Если не передавать compile definitions для дисплея, библиотека использует значения по умолчанию из [src/core/display_driver.h](/home/smikhai/repo/rp_pico_display_engine/src/core/display_driver.h:1):
+
+- Контроллер: `DISPLAY_TYPE_ST7789`
+- SPI порт: `spi0`
+- `MOSI=19`
+- `SCK=18`
+- `CS=17`
+- `DC=22`
+- `RST=13`
+- `BL=12`
+
+То есть без переопределения пинов и `DISPLAY_TYPE` прошивка рассчитана на `ST7789`, подключённый к этим GPIO у `RP2040/RP2350`.
+
 ## Быстрый старт
 
 ### 1. Подключение как subproject (рекомендуется)
@@ -27,7 +55,27 @@
 Практичный вариант интеграции: добавить этот репозиторий в проект (например, как git submodule) и собрать `display_engine` из вашего основного `CMakeLists.txt`.
 Подключать все примитивы сразу не обязательно: оставьте только нужные и раскомментируйте остальные позже.
 
-```cmake
+Создайте новый проект и добавьте библиотеку как submodule:
+
+```bash
+mkdir pico_display_app
+cd pico_display_app
+git init
+git submodule add https://github.com/stasenso/rp_pico_display_engine.git external/rp_pico_display_engine
+git submodule update --init --recursive
+mkdir -p src
+```
+
+Убедитесь, что переменная `PICO_SDK_PATH` выставлена:
+
+```bash
+export PICO_SDK_PATH=/absolute/path/to/pico-sdk
+```
+
+Создайте `CMakeLists.txt` в корне проекта:
+
+```bash
+cat > CMakeLists.txt <<'EOF'
 cmake_minimum_required(VERSION 3.18.4)
 include($ENV{PICO_SDK_PATH}/external/pico_sdk_import.cmake)
 
@@ -79,6 +127,46 @@ target_compile_definitions(display_engine PUBLIC
 add_executable(my_app src/main.c)
 target_link_libraries(my_app PRIVATE display_engine)
 pico_add_extra_outputs(my_app)
+EOF
+```
+
+Создайте `src/main.c`:
+
+```bash
+cat > src/main.c <<'EOF'
+#include "pico/stdlib.h"
+#include "display/display.h"
+#include "display/render/context.h"
+
+int main(void) {
+    stdio_init_all();
+
+    display_config_t cfg = {
+        .width = 320,
+        .height = 240,
+        .buffer_count = 1,
+        .mode = DISPLAY_MODE_SAFE
+    };
+    display_init(&cfg);
+
+    render_ctx_t rc;
+
+    while (1) {
+        uint16_t *buf = display_begin_paint_blocking();
+        render_begin(&rc, buf, 320, 240);
+        render_clear(&rc, RGB16(0, 0, 0));
+        display_end_paint();
+        sleep_ms(16);
+    }
+}
+EOF
+```
+
+Соберите проект:
+
+```bash
+cmake -S . -B build
+cmake --build build
 ```
 
 ### 2. Как менять пины и тип дисплея
@@ -89,7 +177,16 @@ pico_add_extra_outputs(my_app)
 - `DISPLAY_PIN_MOSI`, `DISPLAY_PIN_SCK`, `DISPLAY_PIN_CS`, `DISPLAY_PIN_DC`, `DISPLAY_PIN_RST`, `DISPLAY_PIN_BL`
 - `DISPLAY_TYPE` (`DISPLAY_TYPE_ST7789` или `DISPLAY_TYPE_ILI9341`)
 
-Если определения не заданы, используются значения по умолчанию из `src/core/display_driver.h`.
+Если определения не заданы, используются такие значения по умолчанию из [src/core/display_driver.h](/home/smikhai/repo/rp_pico_display_engine/src/core/display_driver.h:1):
+
+- `DISPLAY_TYPE=DISPLAY_TYPE_ST7789`
+- `DISPLAY_SPI_PORT=spi0`
+- `DISPLAY_PIN_MOSI=19`
+- `DISPLAY_PIN_SCK=18`
+- `DISPLAY_PIN_CS=17`
+- `DISPLAY_PIN_DC=22`
+- `DISPLAY_PIN_RST=13`
+- `DISPLAY_PIN_BL=12`
 
 ### 3. Режим SAFE с одним буфером в цикле
 
@@ -208,6 +305,8 @@ draw_string(&rc, 16, 16, L"Проверка кириллицы", RGB565(255, 255
 
 ## Сборка примера (Pico SDK)
 
+Если хотите собрать готовый пример из этого репозитория без создания собственного проекта:
+
 ```bash
 cd Examples/Thermometr
 mkdir -p build && cd build
@@ -215,8 +314,30 @@ cmake ..
 cmake --build .
 ```
 
-Конфигурация дисплея задаётся в `Examples/Thermometr/CMakeLists.txt` через `target_compile_definitions(...)`:
-`DISPLAY_TYPE`, `DISPLAY_SPI_PORT`, `DISPLAY_PIN_MOSI`, `DISPLAY_PIN_SCK`, `DISPLAY_PIN_CS`, `DISPLAY_PIN_DC`, `DISPLAY_PIN_RST`, `DISPLAY_PIN_BL`.
+Этот пример собирается для стандартной платы Pico SDK, если вы явно не зададите `PICO_BOARD`. Конфигурация дисплея задаётся в [Examples/Thermometr/CMakeLists.txt](/home/smikhai/repo/rp_pico_display_engine/Examples/Thermometr/CMakeLists.txt:1):
+
+- Контроллер: `DISPLAY_TYPE_ILI9341`
+- SPI порт: `spi1`
+- `MOSI=15`
+- `SCK=14`
+- `CS=13`
+- `DC=12`
+- `RST=11`
+- `BL=10`
+
+Также есть [Examples/EngineDemo/CMakeLists.txt](/home/smikhai/repo/rp_pico_display_engine/Examples/EngineDemo/CMakeLists.txt:1), где по умолчанию выбрано:
+
+- Плата: `Pico 2` / `RP2350` (`TARGET_BOARD=pico2_RP2350`)
+- Контроллер: `DISPLAY_TYPE_ST7789`
+- SPI порт: `spi1`
+- `MOSI=15`
+- `SCK=14`
+- `CS=13`
+- `DC=12`
+- `RST=11`
+- `BL=10`
+
+То есть получившийся `.uf2` нужно заливать именно в ту плату, которая выбрана в `CMakeLists.txt` конкретного примера, а дисплей подключать к перечисленным там пинам.
 
 ## Контракт API (важно)
 
