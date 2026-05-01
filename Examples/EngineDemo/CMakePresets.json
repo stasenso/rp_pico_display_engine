@@ -13,14 +13,14 @@
             "name": "rp2040",
             "hidden": true,
             "cacheVariables": {
-                "TARGET_BOARD": "pico_RP2040"
+                "PICO_BOARD": "pico"
             }
         },
         {
             "name": "rp2350",
             "hidden": true,
             "cacheVariables": {
-                "TARGET_BOARD": "pico2_RP2350"
+                "PICO_BOARD": "pico2"
             }
         },
         {

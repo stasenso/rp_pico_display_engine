@@ -1,4 +1,8 @@
 cmake_minimum_required(VERSION 3.18.4)
+
+# Change this line to switch target board manually: `pico` or `pico2`.
+set(PICO_BOARD pico2 CACHE STRING "Pico SDK target board")
+
 include($ENV{PICO_SDK_PATH}/external/pico_sdk_import.cmake)
 
 project(thermometr_example C CXX ASM)
