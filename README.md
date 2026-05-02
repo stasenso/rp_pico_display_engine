@@ -78,7 +78,8 @@ Create the root `CMakeLists.txt`:
 cat > CMakeLists.txt <<'EOF'
 cmake_minimum_required(VERSION 3.18.4)
 
-# Change to `pico` for RP2040-based boards or keep `pico2` for Pico 2 / RP2350.
+# EN: Change to `pico` for RP2040-based boards or keep `pico2` for Pico 2 / RP2350.
+# RU: Замените на `pico` для плат на RP2040 или оставьте `pico2` для Pico 2 / RP2350.
 set(PICO_BOARD pico2 CACHE STRING "Pico SDK target board")
 
 include($ENV{PICO_SDK_PATH}/external/pico_sdk_import.cmake)
@@ -98,7 +99,8 @@ add_library(display_engine STATIC
     ${DISPLAY_ENGINE_DIR}/src/core/display_driver.c
     ${DISPLAY_ENGINE_DIR}/src/render/context.c
     ${DISPLAY_ENGINE_DIR}/src/render/line.c
-    # Uncomment if/when you need these primitives:
+    # EN: Uncomment these sources if/when you need the extra primitives.
+    # RU: Раскомментируйте эти исходники, если понадобятся дополнительные примитивы.
     # ${DISPLAY_ENGINE_DIR}/src/render/grid.c
     # ${DISPLAY_ENGINE_DIR}/src/render/sine_wave.c
     # ${DISPLAY_ENGINE_DIR}/src/render/bezier.c
@@ -117,15 +119,21 @@ target_link_libraries(display_engine PUBLIC
     pico_multicore
 )
 
+# EN: Change the SPI bus, GPIO pins, and display controller here to match your wiring.
+# RU: Здесь измените SPI-шину, GPIO-пины и контроллер дисплея под вашу схему подключения.
 target_compile_definitions(display_engine PUBLIC
+    # EN: Select the display controller backend: ST7789 or ILI9341.
+    # RU: Выберите бэкенд контроллера дисплея: ST7789 или ILI9341.
     DISPLAY_TYPE=DISPLAY_TYPE_ST7789
+    # EN: Select the SPI peripheral connected to the display: spi0 or spi1.
+    # RU: Выберите SPI-периферию, к которой подключён дисплей: spi0 или spi1.
     DISPLAY_SPI_PORT=spi1
-    DISPLAY_PIN_MOSI=15
-    DISPLAY_PIN_SCK=14
-    DISPLAY_PIN_CS=13
-    DISPLAY_PIN_DC=12
-    DISPLAY_PIN_RST=11
-    DISPLAY_PIN_BL=10
+    DISPLAY_PIN_MOSI=15  # DIN / SDA
+    DISPLAY_PIN_SCK=14   # CLK / SCL / SCK
+    DISPLAY_PIN_CS=13    # CS / SS
+    DISPLAY_PIN_DC=12    # DC / A0 / RS
+    DISPLAY_PIN_RST=11   # RST / RES / RESET
+    DISPLAY_PIN_BL=10    # BL / LED / LEDK
 )
 
 add_executable(my_app src/main.c)

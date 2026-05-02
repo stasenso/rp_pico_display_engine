@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.18.4)
 
-# Change this line to switch target board manually: `pico` or `pico2`.
+# EN: Change this line to switch the target board manually: `pico` for RP2040 or `pico2` for RP2350.
+# RU: Измените эту строку, чтобы вручную переключить целевую плату: `pico` для RP2040 или `pico2` для RP2350.
 set(PICO_BOARD pico2 CACHE STRING "Pico SDK target board")
 
 include($ENV{PICO_SDK_PATH}/external/pico_sdk_import.cmake)
@@ -37,19 +38,22 @@ target_link_libraries(display_engine PUBLIC
     pico_multicore
 )
 
-# Display pin mapping (single source of truth for this example).
+# EN: Change the SPI bus, GPIO pins, and display controller here for this example.
+# RU: Здесь изменяются SPI-шина, GPIO-пины и контроллер дисплея для этого примера.
 set(DISPLAY_SPI_PORT spi1)
-set(DISPLAY_PIN_MOSI 15)
-set(DISPLAY_PIN_SCK 14)
-set(DISPLAY_PIN_CS 13)
-set(DISPLAY_PIN_DC 12)
-set(DISPLAY_PIN_RST 11)
-set(DISPLAY_PIN_BL 10)
-# Available values: DISPLAY_TYPE_ST7789, DISPLAY_TYPE_ILI9341
+set(DISPLAY_PIN_MOSI 15) # DIN / SDA
+set(DISPLAY_PIN_SCK 14)  # CLK / SCL / SCK
+set(DISPLAY_PIN_CS 13)   # CS / SS
+set(DISPLAY_PIN_DC 12)   # DC / A0 / RS
+set(DISPLAY_PIN_RST 11)  # RST / RES / RESET
+set(DISPLAY_PIN_BL 10)   # BL / LED / LEDK
+# EN: Available values: DISPLAY_TYPE_ST7789, DISPLAY_TYPE_ILI9341.
+# RU: Доступные значения: DISPLAY_TYPE_ST7789, DISPLAY_TYPE_ILI9341.
 set(DISPLAY_TYPE "DISPLAY_TYPE_ST7789" CACHE STRING "Display controller backend")
 set_property(CACHE DISPLAY_TYPE PROPERTY STRINGS DISPLAY_TYPE_ST7789 DISPLAY_TYPE_ILI9341)
 
-# Pass display mapping into display backend without editing engine sources.
+# EN: These definitions forward the selected board wiring into the display engine without editing its sources.
+# RU: Эти определения передают выбранную разводку платы в display engine без правки его исходников.
 target_compile_definitions(display_engine PUBLIC
     DISPLAY_TYPE=${DISPLAY_TYPE}
     DISPLAY_SPI_PORT=${DISPLAY_SPI_PORT}
