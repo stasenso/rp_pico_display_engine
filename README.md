@@ -2,6 +2,12 @@
 
 A lightweight C display engine for `RP2040/RP2350` and `ST7789` / `ILI9341` SPI displays (DMA) with an explicit `begin/end paint` frame contract.
 
+
+https://github.com/user-attachments/assets/0de36c89-4f57-4a90-a6db-7a84c19ec3cc
+
+
+
+
 ## Features
 
 - Two modes: `DISPLAY_MODE_SAFE` and `DISPLAY_MODE_RAW`
